@@ -6,11 +6,23 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
-
 import type { Route } from "./+types/root";
 import "./app.css";
+import { LoadingScreen } from "~/components/loading-screen";
+
+export const meta: Route.MetaFunction = () => [
+  { title: "Contentful Tools" },
+  {
+    name: "description",
+    content:
+      "Browse and manage Contentful entries, translations, and partner content across locales.",
+  },
+  { name: "theme-color", content: "#036fe3" },
+];
 
 export const links: Route.LinksFunction = () => [
+  { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+  { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
@@ -43,6 +55,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return <Outlet />;
+}
+
+export function HydrateFallback() {
+  return <LoadingScreen />;
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

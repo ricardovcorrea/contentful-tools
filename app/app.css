@@ -1,15 +1,99 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  /* ── Gray → Contentful Forma†36 navy scale ───────────────────────────── */
+  --color-gray-50: #ffffff;
+  --color-gray-100: #f7f9fa; /* element-lightest */
+  --color-gray-200: #e7ebee; /* element-light    */
+  --color-gray-300: #cfd9e0; /* element-mid      */
+  --color-gray-400: #aec1cc; /* element-dark     */
+  --color-gray-500: #67728a; /* element-darkest  */
+  --color-gray-600: #5a657c; /* text-light       */
+  --color-gray-700: #414d63; /* text-mid         */
+  --color-gray-800: #1b273a; /* dark surface     */
+  --color-gray-900: #111b2b; /* darkest surface  */
+  --color-gray-950: #0c141c; /* black            */
+
+  /* ── Blue → Contentful primary blue ─────────────────────────────── */
+  --color-blue-50: #e8f5ff;
+  --color-blue-100: #d4eeff;
+  --color-blue-200: #ceecff;
+  --color-blue-300: #98cbff;
+  --color-blue-400: #40a0ff; /* interactive highlight */
+  --color-blue-500: #036fe3; /* blue-mid — interactive on dark */
+  --color-blue-600: #0059c8; /* blue-base — primary CTA */
+  --color-blue-700: #0041ab;
+  --color-blue-800: #003298;
+  --color-blue-900: #002a8e;
+  --color-blue-950: #001a6e;
+
+  /* ── Violet → Contentful purple (OPCO accent) ────────────────────── */
+  --color-violet-50: #f7f2ff;
+  --color-violet-100: #ede3ff;
+  --color-violet-200: #d1bbff;
+  --color-violet-300: #ae89ff;
+  --color-violet-400: #8553e7; /* purple-mid */
+  --color-violet-500: #8553e7;
+  --color-violet-600: #6c3ecf; /* purple-base */
+  --color-violet-700: #5127b5;
+  --color-violet-800: #3e16a4;
+  --color-violet-900: #340e9c;
+  --color-violet-950: #1f0880;
+
+  /* ── Emerald → Contentful green (Partner accent) ───────────────────── */
+  --color-emerald-50: #eaf9e8;
+  --color-emerald-100: #cdf3c6;
+  --color-emerald-200: #9ed696;
+  --color-emerald-300: #5db057;
+  --color-emerald-400: #5db057;
+  --color-emerald-500: #008539; /* green-mid  */
+  --color-emerald-600: #006d23; /* green-base */
+  --color-emerald-700: #00550c;
+  --color-emerald-800: #004700;
+  --color-emerald-900: #003f00;
+  --color-emerald-950: #002800;
+
+  /* ── Red → Contentful red ───────────────────────────────────────── */
+  --color-red-50: #fff2f2;
+  --color-red-100: #ffe0e0;
+  --color-red-200: #ffb1b2;
+  --color-red-300: #ff707d;
+  --color-red-400: #da294a; /* red-mid  */
+  --color-red-500: #da294a;
+  --color-red-600: #bd002a; /* red-base */
+  --color-red-700: #990017;
+  --color-red-800: #7f0010;
+  --color-red-900: #72000e;
+  --color-red-950: #4a0009;
 }
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  @apply bg-gray-100;
+  color-scheme: light;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.4;
   }
 }
