@@ -96,7 +96,7 @@ export function HeaderPicker({
       <button
         onClick={() => canSwitch && setOpen((p) => !p)}
         disabled={disabled}
-        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all duration-150 ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 ${
           disabled
             ? "opacity-50 cursor-wait border-gray-300 bg-gray-200/50"
             : open
@@ -105,25 +105,25 @@ export function HeaderPicker({
         } ${!canSwitch ? "cursor-default" : "cursor-pointer"}`}
       >
         <span
-          className={`flex items-center justify-center w-5 h-5 rounded text-[8px] font-extrabold shrink-0 border ${t.badge}`}
+          className={`flex items-center justify-center w-6 h-6 rounded text-[9px] font-extrabold shrink-0 border ${t.badge}`}
         >
           {initials(selected?.label ?? value)}
         </span>
         <div className="text-left min-w-0">
           <p
-            className={`text-[7px] font-bold uppercase tracking-widest leading-none mb-0.5 ${t.label}`}
+            className={`text-[8px] font-bold uppercase tracking-widest leading-none mb-0.5 ${t.label}`}
           >
             {label}
           </p>
           <p
-            className={`text-[11px] font-semibold truncate leading-tight ${t.value}`}
+            className={`text-xs font-semibold truncate leading-tight ${t.value}`}
           >
             {selected?.label ?? value}
           </p>
         </div>
         {options.length > 1 && (
           <svg
-            className={`w-2.5 h-2.5 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""} ${t.chevron}`}
+            className={`w-3 h-3 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""} ${t.chevron}`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -141,7 +141,7 @@ export function HeaderPicker({
       {open && (
         <div className="absolute left-0 top-full mt-1.5 z-50 min-w-52 rounded-xl border border-gray-300 bg-gray-100 shadow-2xl shadow-black/50 overflow-hidden">
           <div className="px-3 py-2 border-b border-gray-200">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
               Switch {label.toLowerCase()}
             </p>
           </div>

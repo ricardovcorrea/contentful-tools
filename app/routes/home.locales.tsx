@@ -1,7 +1,7 @@
 import { useRouteLoaderData } from "react-router";
 
 type ParentLoaderData = {
-  locales: {
+  allLocales: {
     items: {
       code: string;
       name: string;
@@ -18,7 +18,7 @@ export default function LocalesPage() {
   const parentData = useRouteLoaderData("routes/home") as ParentLoaderData;
   if (!parentData) return null;
 
-  const { locales, spaceId, environmentId } = parentData;
+  const { allLocales: locales, spaceId, environmentId } = parentData;
 
   return (
     <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-gray-50">

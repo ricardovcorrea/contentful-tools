@@ -9,6 +9,7 @@ export default [
   layout("routes/home.tsx", [
     index("routes/home._index.tsx"),
     route("environment", "routes/home.environment.tsx"),
+    route("assets", "routes/home.assets.tsx"),
     route("entry/:entryId", "routes/home.entry.tsx"),
     route("overview/:scope/:group?", "routes/home.overview.tsx"),
     route("locales", "routes/home.locales.tsx"),

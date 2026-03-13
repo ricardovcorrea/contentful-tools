@@ -1,3 +1,5 @@
+import { isRichText, extractRichTextPlain } from "~/lib/rich-text";
+
 /** Minimal RFC-4180 CSV parser */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -45,6 +47,8 @@ export function serializeCsvValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "boolean" || typeof value === "number")
     return String(value);
+  // Contentful Rich Text Document — extract readable plain text
+  if (isRichText(value)) return extractRichTextPlain(value).trim();
   if (Array.isArray(value)) {
     return value
       .map((v) => {

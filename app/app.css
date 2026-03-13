@@ -5,70 +5,70 @@
     "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
     "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
-  /* ── Gray → Contentful Forma†36 navy scale ───────────────────────────── */
+  /* ── Gray — soft cool-neutral (Vercel/Linear style) ─────────────────── */
   --color-gray-50: #ffffff;
-  --color-gray-100: #f7f9fa; /* element-lightest */
-  --color-gray-200: #e7ebee; /* element-light    */
-  --color-gray-300: #cfd9e0; /* element-mid      */
-  --color-gray-400: #aec1cc; /* element-dark     */
-  --color-gray-500: #67728a; /* element-darkest  */
-  --color-gray-600: #5a657c; /* text-light       */
-  --color-gray-700: #414d63; /* text-mid         */
-  --color-gray-800: #1b273a; /* dark surface     */
-  --color-gray-900: #111b2b; /* darkest surface  */
-  --color-gray-950: #0c141c; /* black            */
+  --color-gray-100: #f6f7f9; /* page background      */
+  --color-gray-200: #eceef2; /* card / panel surface */
+  --color-gray-300: #d8dce5; /* borders, dividers    */
+  --color-gray-400: #9ea5b4; /* placeholder, icons   */
+  --color-gray-500: #6b7280; /* secondary text       */
+  --color-gray-600: #4b5160; /* muted text           */
+  --color-gray-700: #363b47; /* body text            */
+  --color-gray-800: #1e2230; /* dark surface         */
+  --color-gray-900: #13161f; /* darkest surface      */
+  --color-gray-950: #0c0e14; /* near-black           */
 
-  /* ── Blue → Contentful primary blue ─────────────────────────────── */
-  --color-blue-50: #e8f5ff;
-  --color-blue-100: #d4eeff;
-  --color-blue-200: #ceecff;
-  --color-blue-300: #98cbff;
-  --color-blue-400: #40a0ff; /* interactive highlight */
-  --color-blue-500: #036fe3; /* blue-mid — interactive on dark */
-  --color-blue-600: #0059c8; /* blue-base — primary CTA */
-  --color-blue-700: #0041ab;
-  --color-blue-800: #003298;
-  --color-blue-900: #002a8e;
-  --color-blue-950: #001a6e;
+  /* ── Blue — periwinkle / soft indigo (primary interactive) ─────────── */
+  --color-blue-50: #f0f3ff;
+  --color-blue-100: #dfe6ff;
+  --color-blue-200: #c2d0ff;
+  --color-blue-300: #96b0fd;
+  --color-blue-400: #6588f9;
+  --color-blue-500: #4468ef; /* primary interactive  */
+  --color-blue-600: #3352d8; /* CTA / links          */
+  --color-blue-700: #2840bb;
+  --color-blue-800: #22369a;
+  --color-blue-900: #1f2e7f;
+  --color-blue-950: #131b52;
 
-  /* ── Violet → Contentful purple (OPCO accent) ────────────────────── */
-  --color-violet-50: #f7f2ff;
-  --color-violet-100: #ede3ff;
-  --color-violet-200: #d1bbff;
-  --color-violet-300: #ae89ff;
-  --color-violet-400: #8553e7; /* purple-mid */
-  --color-violet-500: #8553e7;
-  --color-violet-600: #6c3ecf; /* purple-base */
-  --color-violet-700: #5127b5;
-  --color-violet-800: #3e16a4;
-  --color-violet-900: #340e9c;
-  --color-violet-950: #1f0880;
+  /* ── Violet — soft lavender (OPCO accent) ───────────────────────────── */
+  --color-violet-50: #f6f3ff;
+  --color-violet-100: #eee9ff;
+  --color-violet-200: #ded4ff;
+  --color-violet-300: #c6b2fd;
+  --color-violet-400: #a888f8;
+  --color-violet-500: #8c62f0; /* OPCO mid             */
+  --color-violet-600: #7245db; /* OPCO base            */
+  --color-violet-700: #5b31bf;
+  --color-violet-800: #4c27a5;
+  --color-violet-900: #3f2089;
+  --color-violet-950: #28115c;
 
-  /* ── Emerald → Contentful green (Partner accent) ───────────────────── */
-  --color-emerald-50: #eaf9e8;
-  --color-emerald-100: #cdf3c6;
-  --color-emerald-200: #9ed696;
-  --color-emerald-300: #5db057;
-  --color-emerald-400: #5db057;
-  --color-emerald-500: #008539; /* green-mid  */
-  --color-emerald-600: #006d23; /* green-base */
-  --color-emerald-700: #00550c;
-  --color-emerald-800: #004700;
-  --color-emerald-900: #003f00;
-  --color-emerald-950: #002800;
+  /* ── Emerald — sage green (Partner accent) ──────────────────────────── */
+  --color-emerald-50: #f0faf5;
+  --color-emerald-100: #d9f4e5;
+  --color-emerald-200: #b5e8cb;
+  --color-emerald-300: #82d4a7;
+  --color-emerald-400: #4dba7e;
+  --color-emerald-500: #29a062; /* partner mid          */
+  --color-emerald-600: #1a844e; /* partner base         */
+  --color-emerald-700: #166940;
+  --color-emerald-800: #145433;
+  --color-emerald-900: #12452a;
+  --color-emerald-950: #092819;
 
-  /* ── Red → Contentful red ───────────────────────────────────────── */
-  --color-red-50: #fff2f2;
-  --color-red-100: #ffe0e0;
-  --color-red-200: #ffb1b2;
-  --color-red-300: #ff707d;
-  --color-red-400: #da294a; /* red-mid  */
-  --color-red-500: #da294a;
-  --color-red-600: #bd002a; /* red-base */
-  --color-red-700: #990017;
-  --color-red-800: #7f0010;
-  --color-red-900: #72000e;
-  --color-red-950: #4a0009;
+  /* ── Red — soft coral / rose ────────────────────────────────────────── */
+  --color-red-50: #fff2f4;
+  --color-red-100: #ffe0e4;
+  --color-red-200: #ffbfc7;
+  --color-red-300: #ff90a1;
+  --color-red-400: #ff5570;
+  --color-red-500: #f23352; /* error mid            */
+  --color-red-600: #d91a3b; /* error base           */
+  --color-red-700: #b5122f;
+  --color-red-800: #961228;
+  --color-red-900: #7d1225;
+  --color-red-950: #470614;
 }
 
 html,

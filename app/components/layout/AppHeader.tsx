@@ -55,13 +55,13 @@ export function AppHeader({
   const { addToast } = useToast();
 
   return (
-    <header className="bg-gray-50 border-b border-gray-200/70 h-11 sm:h-16 lg:h-20 px-2 sm:px-4 lg:px-6 flex items-center justify-between shrink-0 z-50">
+    <header className="bg-gray-50 border-b border-gray-200/70 h-12 sm:h-[4.5rem] lg:h-[5.5rem] px-2 sm:px-4 lg:px-6 flex items-center justify-between shrink-0 z-50">
       {/* Left — Logo + Space + Env */}
       <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          <div className="w-7 h-7 sm:w-9 sm:h-9 lg:w-11 lg:h-11 rounded-xl bg-blue-500 flex items-center justify-center shadow-sm shadow-blue-500/30">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-xl bg-blue-500 flex items-center justify-center shadow-sm shadow-blue-500/30">
             <svg
-              className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-white"
+              className="w-3.5 h-3.5 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -69,22 +69,22 @@ export function AppHeader({
             </svg>
           </div>
           <div className="leading-tight">
-            <div className="text-[9px] font-semibold text-gray-600 uppercase tracking-widest leading-none hidden sm:block">
+            <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest leading-none hidden sm:block">
               Avios
             </div>
-            <div className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 leading-tight">
+            <div className="text-[13px] sm:text-[15px] lg:text-lg font-bold text-gray-900 leading-tight">
               Content Tools
             </div>
           </div>
         </div>
 
-        <div className="w-px h-7 bg-gray-200 mx-1 hidden md:block" />
+        <div className="w-px h-8 bg-gray-200 mx-1 hidden md:block" />
 
         {/* Context pickers — hidden on small mobile */}
         <div className="hidden sm:flex items-center gap-1 shrink-0">
           {/* Space display — read-only, styled like HeaderPicker */}
-          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-orange-500/10 border-orange-500/20 cursor-default">
-            <span className="flex items-center justify-center w-5 h-5 rounded text-[8px] font-extrabold shrink-0 border bg-orange-500/20 border-orange-300/50 text-orange-600">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-orange-500/10 border-orange-500/20 cursor-default">
+            <span className="flex items-center justify-center w-6 h-6 rounded text-[9px] font-extrabold shrink-0 border bg-orange-500/20 border-orange-300/50 text-orange-600">
               {spaceName
                 .split(/[\s_\-]+/)
                 .slice(0, 2)
@@ -92,15 +92,15 @@ export function AppHeader({
                 .join("")}
             </span>
             <div className="text-left min-w-0">
-              <p className="text-[7px] font-bold uppercase tracking-widest leading-none mb-0.5 text-orange-400">
+              <p className="text-[8px] font-bold uppercase tracking-widest leading-none mb-0.5 text-orange-400">
                 Space
               </p>
-              <p className="text-[11px] font-semibold truncate leading-tight text-orange-700">
+              <p className="text-xs font-semibold truncate leading-tight text-orange-700">
                 {spaceName}
               </p>
             </div>
           </div>
-          <div className="w-px h-6 bg-gray-200" />
+          <div className="w-px h-7 bg-gray-200" />
           <HeaderPicker
             label="Environment"
             value={environmentId}
@@ -109,7 +109,7 @@ export function AppHeader({
             disabled={isLoading}
             theme="blue"
           />
-          <div className="w-px h-6 bg-gray-200" />
+          <div className="w-px h-7 bg-gray-200" />
           <HeaderPicker
             label="OPCO"
             value={selectedOpco}
@@ -118,7 +118,7 @@ export function AppHeader({
             disabled={isLoading}
             theme="violet"
           />
-          <div className="w-px h-6 bg-gray-200" />
+          <div className="w-px h-7 bg-gray-200" />
           <HeaderPicker
             label="Partner"
             value={selectedPartner}
@@ -130,28 +130,28 @@ export function AppHeader({
         </div>
       </div>
 
-      {/* Right — User + sign out */}
+      {/* Right — User + clear & exit */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         <div className="flex items-center gap-1.5 sm:gap-3">
           {currentUser.avatarUrl ? (
             <img
               src={currentUser.avatarUrl}
               alt={`${currentUser.firstName} ${currentUser.lastName}`}
-              className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full object-cover ring-1 ring-gray-300"
+              className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full object-cover ring-1 ring-gray-300"
             />
           ) : (
-            <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-              <span className="text-[9px] sm:text-[10px] font-bold text-blue-600">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+              <span className="text-[10px] sm:text-[11px] font-bold text-blue-600">
                 {currentUser.firstName?.[0]}
                 {currentUser.lastName?.[0]}
               </span>
             </div>
           )}
           <div className="leading-tight hidden xl:block">
-            <p className="text-[11px] font-semibold text-gray-700">
+            <p className="text-xs font-semibold text-gray-700">
               {currentUser.firstName} {currentUser.lastName}
             </p>
-            <p className="text-[9px] text-gray-600">{currentUser.email}</p>
+            <p className="text-[10px] text-gray-600">{currentUser.email}</p>
           </div>
         </div>
 
@@ -167,11 +167,11 @@ export function AppHeader({
             addToast("All data cleared. Signing you out…", "info");
             setTimeout(() => navigate("/login"), 1800);
           }}
-          className="rounded-md border border-gray-200 px-1.5 py-1.5 sm:px-3 sm:py-2 lg:px-4 lg:py-2 text-xs font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-1"
+          className="rounded-md border border-gray-200 px-2 py-2 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2.5 text-[13px] font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-1"
         >
           {/* Icon always visible */}
           <svg
-            className="w-3 h-3 shrink-0"
+            className="w-3.5 h-3.5 shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -184,7 +184,7 @@ export function AppHeader({
             />
           </svg>
           {/* Text hidden on small mobile */}
-          <span className="hidden sm:inline">Sign out</span>
+          <span className="hidden sm:inline">Clear &amp; exit</span>
         </button>
       </div>
     </header>

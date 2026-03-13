@@ -583,6 +583,91 @@ function EditableCell({
     }
   }
 
+  // Boolean fields: render an interactive checkbox that saves on click.
+  if (typeof rawValue === "boolean" || typeof effectiveValue === "boolean") {
+    const boolVal = effectiveValue === true;
+    return (
+      <button
+        disabled={saving}
+        onClick={async () => {
+          setSaving(true);
+          setSaveError(null);
+          try {
+            const environment = await getContentfulManagementEnvironment();
+            const cfEntry = await environment.getEntry(entryId);
+            cfEntry.fields[fieldKey] ??= {};
+            const newVal = !boolVal;
+            cfEntry.fields[fieldKey][locale] = newVal;
+            await cfEntry.update();
+            onSaved(fieldKey, locale, newVal);
+            addToast("Field saved successfully.", "success");
+          } catch (err: any) {
+            const msg = err?.message ?? "Save failed";
+            setSaveError(msg);
+            addToast(msg, "error");
+          } finally {
+            setSaving(false);
+          }
+        }}
+        className={`flex items-center gap-2 py-0.5 px-1 rounded transition-opacity ${saving ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 cursor-pointer"}`}
+        title="Click to toggle"
+      >
+        <div
+          className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
+            boolVal ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
+          }`}
+        >
+          {boolVal && (
+            <svg
+              className="w-2.5 h-2.5 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          )}
+        </div>
+        <span
+          className={`text-sm font-medium ${boolVal ? "text-blue-600" : "text-gray-400"}`}
+        >
+          {boolVal ? "true" : "false"}
+        </span>
+        {saving && (
+          <svg
+            className="w-3.5 h-3.5 animate-spin text-gray-400 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
+          </svg>
+        )}
+        {saveError && (
+          <span className="text-[10px] text-red-500 font-medium">
+            {saveError}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   if (isCellEditing) {
     return (
       <div className="flex flex-col gap-1.5">

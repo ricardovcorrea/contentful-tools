@@ -130,30 +130,28 @@ function Tile({
   );
 }
 
-function CoverageColumn({
-  label,
-  badge,
-  badgeColor,
-  accentColor,
+function TranslationCoverageCard({
   entryCount,
-  localizableEntries,
-  entriesWithMissing,
-  missingPerLocale,
+  combinedStats,
   locales,
-  onViewOverview,
+  localeCount,
+  onViewOpco,
+  onViewPartner,
+  opcoHasLocalizable,
+  partnerHasLocalizable,
 }: {
-  label: string;
-  badge: string;
-  badgeColor: string;
-  accentColor: string;
   entryCount: number;
-  localizableEntries: number;
-  entriesWithMissing: number;
-  missingPerLocale: Record<string, number>;
+  combinedStats: ReturnType<typeof getMissingStats>;
   locales: Locale[];
-  onViewOverview?: () => void;
+  localeCount: number;
+  onViewOpco?: () => void;
+  onViewPartner?: () => void;
+  opcoHasLocalizable: boolean;
+  partnerHasLocalizable: boolean;
 }) {
   const nonDefaultLocales = locales.filter((l) => !l.default);
+  const { localizableEntries, entriesWithMissing, missingPerLocale } =
+    combinedStats;
   const coveragePct =
     localizableEntries > 0
       ? Math.round(
@@ -163,163 +161,6 @@ function CoverageColumn({
       : 100;
 
   return (
-    <div className="flex flex-col gap-3 min-w-0">
-      {/* Column header */}
-      <div className="flex items-center justify-between gap-2">
-        <span
-          className={`text-[10px] font-bold uppercase tracking-widest ${accentColor}`}
-        >
-          {label}
-        </span>
-        <span
-          className={`text-[9px] font-mono px-1.5 py-0.5 rounded border truncate max-w-28 ${badgeColor}`}
-        >
-          {badge}
-        </span>
-      </div>
-
-      {/* Summary counters */}
-      <div className="grid grid-cols-3 gap-1.5">
-        <div className="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-          <p className="text-[8px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">
-            Entries
-          </p>
-          <p className="text-sm font-bold tabular-nums text-gray-800">
-            {entryCount}
-          </p>
-        </div>
-        <div className="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-          <p className="text-[8px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">
-            Localizable
-          </p>
-          <p className="text-sm font-bold tabular-nums text-gray-800">
-            {localizableEntries}
-          </p>
-        </div>
-        <div
-          className={`rounded-lg px-2 py-1.5 text-center border ${
-            entriesWithMissing > 0
-              ? "bg-amber-50 border-amber-200/60"
-              : "bg-emerald-50 border-emerald-200/60"
-          }`}
-        >
-          <p
-            className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${entriesWithMissing > 0 ? "text-amber-500" : "text-emerald-500"}`}
-          >
-            Missing
-          </p>
-          <p
-            className={`text-sm font-bold tabular-nums ${entriesWithMissing > 0 ? "text-amber-700" : "text-emerald-700"}`}
-          >
-            {entriesWithMissing}
-          </p>
-        </div>
-      </div>
-
-      {/* Coverage bar */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-            Coverage
-          </span>
-          <span
-            className={`text-[11px] font-bold tabular-nums ${coveragePct === 100 ? "text-emerald-600" : coveragePct >= 80 ? "text-amber-600" : "text-red-600"}`}
-          >
-            {coveragePct}%
-          </span>
-        </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${coveragePct === 100 ? "bg-emerald-500" : coveragePct >= 80 ? "bg-amber-400" : "bg-red-400"}`}
-            style={{ width: `${coveragePct}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Per-locale breakdown */}
-      {nonDefaultLocales.length > 0 && (
-        <div className="border-t border-gray-100 pt-2.5 flex-1">
-          <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-2">
-            Missing by locale
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {nonDefaultLocales.map((locale) => {
-              const missing = missingPerLocale[locale.code] ?? 0;
-              const pct =
-                localizableEntries > 0
-                  ? Math.round((missing / localizableEntries) * 100)
-                  : 0;
-              return (
-                <div key={locale.code} className="flex items-center gap-2">
-                  <span className="w-8 text-[9px] font-mono text-gray-400 shrink-0 uppercase">
-                    {locale.code.split("-")[0]}
-                  </span>
-                  <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${missing === 0 ? "bg-emerald-400" : "bg-amber-400"}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="w-6 text-right text-[10px] font-semibold tabular-nums text-gray-600 shrink-0">
-                    {missing}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Link */}
-      {onViewOverview && (
-        <button
-          onClick={onViewOverview}
-          className={`mt-auto w-full text-left flex items-center justify-between gap-2 text-xs font-medium border-t border-gray-100 pt-2.5 hover:opacity-70 transition-opacity group ${accentColor}`}
-        >
-          <span>View full overview</span>
-          <svg
-            className="w-3 h-3 shrink-0 group-hover:translate-x-0.5 transition-transform"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-        </button>
-      )}
-    </div>
-  );
-}
-
-function UnifiedTranslationCard({
-  opcoName,
-  partnerName,
-  opcoEntryCount,
-  partnerEntryCount,
-  opcoStats,
-  partnerStats,
-  locales,
-  opcoLocaleCount,
-  onViewOpco,
-  onViewPartner,
-}: {
-  opcoName: string;
-  partnerName: string;
-  opcoEntryCount: number;
-  partnerEntryCount: number;
-  opcoStats: ReturnType<typeof getMissingStats>;
-  partnerStats: ReturnType<typeof getMissingStats>;
-  locales: Locale[];
-  opcoLocaleCount: number;
-  onViewOpco?: () => void;
-  onViewPartner?: () => void;
-}) {
-  return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Card header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50/60">
@@ -327,39 +168,171 @@ function UnifiedTranslationCard({
           Translation Coverage
         </p>
         <span className="text-[10px] font-medium text-sky-600 bg-sky-500/8 border border-sky-200/60 rounded px-1.5 py-0.5">
-          {opcoLocaleCount} locale{opcoLocaleCount !== 1 ? "s" : ""}
+          {localeCount} locale{localeCount !== 1 ? "s" : ""}
         </span>
       </div>
 
-      <div className="px-4 py-4 grid grid-cols-2 gap-x-6">
-        {/* Vertical divider */}
-        <CoverageColumn
-          label="OPCO"
-          badge={opcoName}
-          badgeColor="text-violet-400 bg-violet-500/10 border-violet-200/40"
-          accentColor="text-violet-600"
-          entryCount={opcoEntryCount}
-          localizableEntries={opcoStats.localizableEntries}
-          entriesWithMissing={opcoStats.entriesWithMissing}
-          missingPerLocale={opcoStats.missingPerLocale}
-          locales={locales}
-          onViewOverview={onViewOpco}
-        />
-        <div className="relative">
-          <div className="absolute -left-3 top-0 bottom-0 w-px bg-gray-100" />
-          <CoverageColumn
-            label="Partner"
-            badge={partnerName}
-            badgeColor="text-emerald-500 bg-emerald-500/10 border-emerald-200/40"
-            accentColor="text-emerald-600"
-            entryCount={partnerEntryCount}
-            localizableEntries={partnerStats.localizableEntries}
-            entriesWithMissing={partnerStats.entriesWithMissing}
-            missingPerLocale={partnerStats.missingPerLocale}
-            locales={locales}
-            onViewOverview={onViewPartner}
-          />
+      <div className="px-4 py-4 flex flex-col gap-3">
+        {/* Summary counters */}
+        <div className="grid grid-cols-3 gap-1.5">
+          <div className="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
+            <p className="text-[8px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">
+              Entries
+            </p>
+            <p className="text-sm font-bold tabular-nums text-gray-800">
+              {entryCount}
+            </p>
+          </div>
+          <div className="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
+            <p className="text-[8px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">
+              Localizable
+            </p>
+            <p className="text-sm font-bold tabular-nums text-gray-800">
+              {localizableEntries}
+            </p>
+          </div>
+          <div
+            className={`rounded-lg px-2 py-1.5 text-center border ${
+              entriesWithMissing > 0
+                ? "bg-amber-50 border-amber-200/60"
+                : "bg-emerald-50 border-emerald-200/60"
+            }`}
+          >
+            <p
+              className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${
+                entriesWithMissing > 0 ? "text-amber-500" : "text-emerald-500"
+              }`}
+            >
+              Missing
+            </p>
+            <p
+              className={`text-sm font-bold tabular-nums ${
+                entriesWithMissing > 0 ? "text-amber-700" : "text-emerald-700"
+              }`}
+            >
+              {entriesWithMissing}
+            </p>
+          </div>
         </div>
+
+        {/* Coverage bar */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+              Coverage
+            </span>
+            <span
+              className={`text-[11px] font-bold tabular-nums ${
+                coveragePct === 100
+                  ? "text-emerald-600"
+                  : coveragePct >= 80
+                    ? "text-amber-600"
+                    : "text-red-600"
+              }`}
+            >
+              {coveragePct}%
+            </span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                coveragePct === 100
+                  ? "bg-emerald-500"
+                  : coveragePct >= 80
+                    ? "bg-amber-400"
+                    : "bg-red-400"
+              }`}
+              style={{ width: `${coveragePct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Per-locale breakdown */}
+        {nonDefaultLocales.length > 0 && (
+          <div className="border-t border-gray-100 pt-2.5">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+              Missing by locale
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {nonDefaultLocales.map((locale) => {
+                const missing = missingPerLocale[locale.code] ?? 0;
+                const pct =
+                  localizableEntries > 0
+                    ? Math.round((missing / localizableEntries) * 100)
+                    : 0;
+                return (
+                  <div key={locale.code} className="flex items-center gap-2">
+                    <span className="w-12 text-[9px] font-mono text-gray-400 shrink-0 uppercase">
+                      {locale.code}
+                    </span>
+                    <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          missing === 0 ? "bg-emerald-400" : "bg-amber-400"
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="w-6 text-right text-[10px] font-semibold tabular-nums text-gray-600 shrink-0">
+                      {missing}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Links */}
+        {(onViewOpco || onViewPartner) && (
+          <div className="border-t border-gray-100 pt-2.5 flex gap-3">
+            {onViewOpco && (
+              <button
+                onClick={onViewOpco}
+                className="flex-1 text-left flex items-center justify-between gap-2 text-xs font-medium text-violet-600 hover:opacity-70 transition-opacity group"
+              >
+                <span>OPCO overview</span>
+                <svg
+                  className="w-3 h-3 shrink-0 group-hover:translate-x-0.5 transition-transform"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            )}
+            {onViewOpco && onViewPartner && (
+              <div className="w-px bg-gray-100" />
+            )}
+            {onViewPartner && (
+              <button
+                onClick={onViewPartner}
+                className="flex-1 text-left flex items-center justify-between gap-2 text-xs font-medium text-emerald-600 hover:opacity-70 transition-opacity group"
+              >
+                <span>Partner overview</span>
+                <svg
+                  className="w-3 h-3 shrink-0 group-hover:translate-x-0.5 transition-transform"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -659,14 +632,18 @@ export default function EnvironmentOverview() {
     ...partnerRefGroups.flatMap((g) => g.items),
   ];
 
-  const opcoStats = getMissingStats(
-    allOpcoEntries,
-    locales.items,
-    localizableContentTypes,
-    localizableFieldsMap,
-  );
-  const partnerStats = getMissingStats(
-    allPartnerEntries,
+  // Deduplicate by sys.id so overlapping entries are only counted once.
+  const seenIds = new Set<string>();
+  const allEntries: any[] = [];
+  for (const entry of [...allOpcoEntries, ...allPartnerEntries]) {
+    if (!seenIds.has(entry.sys.id)) {
+      seenIds.add(entry.sys.id);
+      allEntries.push(entry);
+    }
+  }
+
+  const combinedStats = getMissingStats(
+    allEntries,
     locales.items,
     localizableContentTypes,
     localizableFieldsMap,
@@ -688,7 +665,7 @@ export default function EnvironmentOverview() {
     partnerRefGroups.some((g) => isLocalizable(g.items));
 
   return (
-    <main className="flex-1 overflow-y-auto p-3 bg-gray-50">
+    <main className="flex-1 overflow-y-auto px-5 py-4 bg-gray-50">
       {/* Header */}
       <div className="mb-2 flex items-center gap-1.5 flex-wrap">
         <div>
@@ -726,7 +703,7 @@ export default function EnvironmentOverview() {
       </div>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4">
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-5">
         <Tile
           label="Entries"
           value={envStats.totalEntries}
@@ -755,16 +732,12 @@ export default function EnvironmentOverview() {
       </div>
 
       {/* Row 2: translation coverage + placeholder */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <UnifiedTranslationCard
-          opcoName={opcoName}
-          partnerName={partnerName}
-          opcoEntryCount={allOpcoEntries.length}
-          partnerEntryCount={allPartnerEntries.length}
-          opcoStats={opcoStats}
-          partnerStats={partnerStats}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <TranslationCoverageCard
+          entryCount={allEntries.length}
+          combinedStats={combinedStats}
           locales={locales.items}
-          opcoLocaleCount={locales.items.length}
+          localeCount={locales.items.length}
           onViewOpco={
             opcoHasLocalizable ? () => navigate("/overview/opco") : undefined
           }
@@ -773,12 +746,14 @@ export default function EnvironmentOverview() {
               ? () => navigate("/overview/partner")
               : undefined
           }
+          opcoHasLocalizable={opcoHasLocalizable}
+          partnerHasLocalizable={partnerHasLocalizable}
         />
         {/* Placeholder for future card */}
       </div>
 
       {/* Row 3: unpublished + scheduled */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
         <UnpublishedCard
           entries={[
             ...allOpcoEntries.map((item) => ({ item, scope: "opco" as const })),

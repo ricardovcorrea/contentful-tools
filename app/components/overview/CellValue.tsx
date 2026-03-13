@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getAsset } from "~/lib/contentful/get-asset";
 import { getEntry } from "~/lib/contentful/get-entry";
+import { isRichText, extractRichTextPlain } from "~/lib/rich-text";
 
 // ── Asset helpers ─────────────────────────────────────────────────────────
 
@@ -171,6 +172,54 @@ export function CellValue({
   if (typeof value === "string") {
     return (
       <span className="text-gray-700 text-sm wrap-break-word">{value}</span>
+    );
+  }
+  if (typeof value === "boolean") {
+    return value ? (
+      <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-semibold">
+        <svg
+          className="w-3.5 h-3.5 shrink-0"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M5 13l4 4L19 7"
+          />
+        </svg>
+        true
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-gray-400 text-xs font-semibold">
+        <svg
+          className="w-3.5 h-3.5 shrink-0"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+        false
+      </span>
+    );
+  }
+  // Contentful Rich Text Document — render as readable plain text
+  if (isRichText(value)) {
+    const text = extractRichTextPlain(value).trim();
+    return text ? (
+      <span className="text-gray-700 text-sm wrap-break-word whitespace-pre-wrap leading-relaxed">
+        {text}
+      </span>
+    ) : (
+      <span className="text-gray-400 italic text-xs">empty rich text</span>
     );
   }
   if (typeof value === "object" && value !== null) {

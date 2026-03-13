@@ -7,6 +7,11 @@ import { getEntry, invalidateEntry } from "~/lib/contentful/get-entry";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
 import { clearCache } from "~/lib/contentful/cache";
 import { resolveStringField } from "~/lib/resolve-string-field";
+import {
+  isRichText,
+  extractRichTextPlain,
+  wrapAsRichText,
+} from "~/lib/rich-text";
 // ── Extracted components (kept here as fallback; extracted versions in components/) ──
 import {
   CellValue as _CellValue,
@@ -46,6 +51,7 @@ type ParentLoaderData = {
     items: any[];
   }>;
   locales: { items: { code: string }[] };
+  opcoConfiguredLocaleCodes?: string[];
   spaceId: string;
   environmentId: string;
 };
@@ -320,6 +326,8 @@ function serializeCsvValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "boolean" || typeof value === "number")
     return String(value);
+  // Contentful Rich Text Document — extract readable plain text
+  if (isRichText(value)) return extractRichTextPlain(value).trim();
   if (Array.isArray(value)) {
     return value
       .map((v) => {
@@ -409,6 +417,7 @@ function parseCsv(text: string): string[][] {
 function GroupTable({
   group,
   localeCodes,
+  targetLocaleCodes,
   firstLocale,
   navigate,
   spaceId,
@@ -421,6 +430,8 @@ function GroupTable({
 }: {
   group: EntryGroup;
   localeCodes: string[];
+  /** Locales to use for missing-translation detection (excludes en-GB when not in OPCO config) */
+  targetLocaleCodes: string[];
   firstLocale: string;
   navigate: (path: string) => void;
   spaceId: string;
@@ -437,7 +448,7 @@ function GroupTable({
     useLocalizableFields(contentTypeId);
 
   // ── Inline edit state ──────────────────────────────────────────────
-  const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
+  const [localEdits, setLocalEdits] = useState<Record<string, unknown>>({});
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [savingCell, setSavingCell] = useState<string | null>(null);
@@ -446,7 +457,12 @@ function GroupTable({
   );
 
   const handleSaveInline = useCallback(
-    async (entryId: string, fieldId: string, lc: string, value: string) => {
+    async (
+      entryId: string,
+      fieldId: string,
+      lc: string,
+      value: string | boolean,
+    ) => {
       const ck = `${entryId}|${fieldId}|${lc}`;
       setSavingCell(ck);
       setSaveCellError((prev) => {
@@ -458,18 +474,26 @@ function GroupTable({
         const environment = await getContentfulManagementEnvironment();
         const cfEntry = await environment.getEntry(entryId);
         cfEntry.fields[fieldId] ??= {};
-        cfEntry.fields[fieldId][lc] = value;
+        // Booleans: save as-is. Rich Text: wrap plain-text. Otherwise: save string.
+        const existingVal = cfEntry.fields[fieldId][lc];
+        const valueToSave =
+          typeof value === "boolean"
+            ? value
+            : isRichText(existingVal)
+              ? wrapAsRichText(value)
+              : value;
+        cfEntry.fields[fieldId][lc] = valueToSave;
         await cfEntry.update();
         // Mutate the cached list item in-place so the value persists across
         // re-renders and future reads without needing a full data reload.
         const cachedItem = group.items.find((i: any) => i.sys.id === entryId);
         if (cachedItem) {
           cachedItem.fields[fieldId] ??= {};
-          cachedItem.fields[fieldId][lc] = value;
+          cachedItem.fields[fieldId][lc] = valueToSave;
         }
         // Invalidate the per-entry cache so getEntry() callers also get fresh data.
         invalidateEntry(entryId);
-        setLocalEdits((prev) => ({ ...prev, [ck]: value }));
+        setLocalEdits((prev) => ({ ...prev, [ck]: valueToSave }));
         setEditingCell(null);
         setEditingValue("");
       } catch (err: any) {
@@ -512,7 +536,9 @@ function GroupTable({
     localizableFields && localizableFields.length > 0
       ? group.items.filter((item) =>
           localizableFields.some((fieldId) =>
-            localeCodes.some((lc) => isFieldMissing(item.fields[fieldId], lc)),
+            targetLocaleCodes.some((lc) =>
+              isFieldMissing(item.fields[fieldId], lc),
+            ),
           ),
         ).length
       : 0;
@@ -639,7 +665,7 @@ function GroupTable({
                     const entryBg =
                       entryIndex % 2 === 0 ? "bg-gray-100" : "bg-gray-200/40";
                     const entryHasMissing = localizableFields.some((fieldId) =>
-                      localeCodes.some((lc) =>
+                      targetLocaleCodes.some((lc) =>
                         isFieldMissing(item.fields[fieldId], lc),
                       ),
                     );
@@ -717,10 +743,109 @@ function GroupTable({
                               : item.fields[fieldId]?.[lc];
                             const missing =
                               !isLocallySaved &&
+                              targetLocaleCodes.includes(lc) &&
                               isFieldMissing(item.fields[fieldId], lc);
                             const isEditing = editingCell === ck;
                             const isSaving = savingCell === ck;
                             const cellError = saveCellError[ck];
+
+                            // ── Boolean field: render a toggle checkbox ────
+                            const isBooleanField =
+                              typeof effectiveVal === "boolean" ||
+                              typeof item.fields[fieldId]?.[firstLocale] ===
+                                "boolean";
+                            if (isBooleanField) {
+                              const boolVal = effectiveVal === true;
+                              return (
+                                <td
+                                  key={lc}
+                                  className={`px-4 py-2 align-top border-l border-gray-300/60 ${topBorder} ${isLastField ? "pb-3" : ""}`}
+                                >
+                                  <button
+                                    disabled={isSaving || lc === firstLocale}
+                                    onClick={() =>
+                                      lc !== firstLocale &&
+                                      handleSaveInline(
+                                        item.sys.id,
+                                        fieldId,
+                                        lc,
+                                        !boolVal,
+                                      )
+                                    }
+                                    className={`flex items-center gap-1.5 py-0.5 rounded transition-opacity ${lc === firstLocale ? "cursor-default opacity-60" : "cursor-pointer hover:opacity-80"} ${isSaving ? "opacity-40" : ""}`}
+                                    title={
+                                      lc === firstLocale
+                                        ? "Source locale"
+                                        : `Click to toggle ${fieldId} / ${lc}`
+                                    }
+                                  >
+                                    <div
+                                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
+                                        boolVal
+                                          ? "bg-blue-500 border-blue-500"
+                                          : "bg-white border-gray-300"
+                                      }`}
+                                    >
+                                      {boolVal && (
+                                        <svg
+                                          className="w-2.5 h-2.5 text-white"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          stroke="currentColor"
+                                          strokeWidth={3.5}
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M5 13l4 4L19 7"
+                                          />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    <span
+                                      className={`text-xs font-medium ${
+                                        boolVal
+                                          ? "text-blue-600"
+                                          : "text-gray-400"
+                                      }`}
+                                    >
+                                      {boolVal ? "true" : "false"}
+                                    </span>
+                                    {isSaving && (
+                                      <svg
+                                        className="w-3 h-3 animate-spin text-gray-400"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <circle
+                                          className="opacity-25"
+                                          cx="12"
+                                          cy="12"
+                                          r="10"
+                                          stroke="currentColor"
+                                          strokeWidth="4"
+                                        />
+                                        <path
+                                          className="opacity-75"
+                                          fill="currentColor"
+                                          d="M4 12a8 8 0 018-8v8H4z"
+                                        />
+                                      </svg>
+                                    )}
+                                    {isLocallySaved && (
+                                      <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-100 px-1 py-0.5 rounded">
+                                        saved
+                                      </span>
+                                    )}
+                                  </button>
+                                  {cellError && (
+                                    <p className="text-[10px] text-red-500 mt-1">
+                                      {cellError}
+                                    </p>
+                                  )}
+                                </td>
+                              );
+                            }
 
                             if (isEditing) {
                               return (
@@ -830,9 +955,15 @@ function GroupTable({
                                   e.stopPropagation();
                                   setEditingCell(ck);
                                   setEditingValue(
-                                    typeof effectiveVal === "string"
-                                      ? effectiveVal
-                                      : "",
+                                    isRichText(effectiveVal)
+                                      ? extractRichTextPlain(
+                                          effectiveVal,
+                                        ).trim()
+                                      : typeof effectiveVal === "string"
+                                        ? effectiveVal
+                                        : typeof effectiveVal === "boolean"
+                                          ? String(effectiveVal)
+                                          : "",
                                   );
                                 }}
                                 title={`Click to edit ${fieldId} / ${lc}`}
@@ -849,23 +980,21 @@ function GroupTable({
                                     </span>
                                   </span>
                                 ) : missing ? (
-                                  <span className="flex items-center justify-between gap-1">
-                                    <span className="text-[10px] text-red-400 italic">
-                                      Click to translate…
-                                    </span>
+                                  <span className="inline-flex items-center gap-1 text-red-400/80 italic text-xs font-medium">
                                     <svg
-                                      className="w-3.5 h-3.5 shrink-0 text-red-400 group-hover/cell:text-blue-400 transition-colors"
+                                      className="w-3 h-3 shrink-0"
                                       fill="none"
                                       viewBox="0 0 24 24"
                                       stroke="currentColor"
-                                      strokeWidth={2}
+                                      strokeWidth={2.5}
                                     >
                                       <path
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
-                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                        d="M6 18L18 6M6 6l12 12"
                                       />
                                     </svg>
+                                    missing
                                   </span>
                                 ) : (
                                   <span className="flex items-center justify-between gap-1">
@@ -927,15 +1056,22 @@ export default function OverviewPage() {
     partnerId,
     spaceId,
     environmentId,
+    opcoConfiguredLocaleCodes,
   } = parentData;
 
-  // Rule 1: en-GB is always the source column regardless of OPCO locale config.
+  // Rule 1: en-GB is always the source column (base language).
   // Rule 2: remaining columns are the OPCO's configured locales (en-GB excluded).
   // Rule 3: a cell is "missing" when en-GB has a value but the OPCO locale does not.
   const EN_GB = "en-GB";
   const opcoLocaleCodes = locales.items.map((l) => l.code);
   const localeCodes = [EN_GB, ...opcoLocaleCodes.filter((l) => l !== EN_GB)];
   const firstLocale = EN_GB;
+  // Locales to consider for missing-translation detection:
+  // Only OPCO-explicitly-configured locales, excluding en-GB (it is the source,
+  // never a translation target — unless the OPCO has explicitly listed it AND it
+  // is not the default/source locale).
+  const configuredCodes = opcoConfiguredLocaleCodes ?? opcoLocaleCodes;
+  const missingCheckCodes = configuredCodes.filter((c) => c !== EN_GB);
   const isOpco = scope === "opco";
   const showPartnerInOpco = isOpco && !group;
 
@@ -1362,7 +1498,12 @@ export default function OverviewPage() {
           for (const [field, locales] of Object.entries(entry.fields)) {
             cfEntry.fields[field] ??= {};
             for (const [locale, value] of Object.entries(locales)) {
-              cfEntry.fields[field][locale] = value;
+              // If the existing field value is Rich Text, wrap the plain-text
+              // translation in a minimal Contentful Document structure.
+              const existingVal = cfEntry.fields[field]?.[locale];
+              cfEntry.fields[field][locale] = isRichText(existingVal)
+                ? wrapAsRichText(value)
+                : value;
             }
           }
           const updated = await cfEntry.update();
@@ -1778,6 +1919,7 @@ export default function OverviewPage() {
                       key={key}
                       group={group}
                       localeCodes={localeCodes}
+                      targetLocaleCodes={missingCheckCodes}
                       firstLocale={firstLocale}
                       navigate={navigate}
                       spaceId={spaceId}
@@ -1830,6 +1972,7 @@ export default function OverviewPage() {
                         key={key}
                         group={group}
                         localeCodes={localeCodes}
+                        targetLocaleCodes={missingCheckCodes}
                         firstLocale={firstLocale}
                         navigate={navigate}
                         spaceId={spaceId}

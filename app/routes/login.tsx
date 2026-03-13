@@ -247,7 +247,7 @@ export default function Login() {
                       type="password"
                       value={token}
                       onChange={(e) => setToken(e.target.value)}
-                      placeholder="CFPAT-…"
+                      placeholder="CFPAT-****-****-****-****-************"
                       autoComplete="off"
                       autoFocus
                       disabled={isValidating || isLoadingSpaces}

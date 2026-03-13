@@ -154,15 +154,39 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     selectedOpcoEntry?.fields?.["locales"]?.[firstLocale];
   // Keep a snapshot of all environment locales before narrowing to the OPCO set.
   const allLocalesItems: any[] = locales.items;
-  const filteredLocaleItems =
-    Array.isArray(rawOpcoLocales) && rawOpcoLocales.length > 0
-      ? allLocalesItems.filter((l: any) =>
-          (rawOpcoLocales as string[]).includes(l.code),
-        )
-      : allLocalesItems;
+
+  // Build the OPCO-filtered locale list.
+  // Strategy: if rawOpcoLocales is a non-empty string array, build a list by:
+  //   1. Always including the environment default locale (en-GB) first.
+  //   2. Including any environment locale whose code is in rawOpcoLocales.
+  //   3. IF a rawOpcoLocales code has no matching environment locale (e.g. the
+  //      environment doesn't explicitly register it), synthesise a minimal locale
+  //      object so the column still appears in the overview table.
+  let filteredLocaleItems: any[];
+  if (Array.isArray(rawOpcoLocales) && rawOpcoLocales.length > 0) {
+    const opcoLocaleCodes = rawOpcoLocales as string[];
+    // Start with all env locales that are default OR in the OPCO list.
+    const matched = allLocalesItems.filter(
+      (l: any) => l.default || opcoLocaleCodes.includes(l.code),
+    );
+    const matchedCodesSet = new Set(matched.map((l: any) => l.code));
+    // Synthesise entries for OPCO locales that have no env locale record.
+    const synthetic = opcoLocaleCodes
+      .filter((code) => !matchedCodesSet.has(code))
+      .map((code) => ({ code, name: code, default: false }));
+    filteredLocaleItems = [...matched, ...synthetic];
+  } else {
+    filteredLocaleItems = allLocalesItems;
+  }
   // Build plain objects so child routes always get plain serialisable data.
   const allLocales = { items: allLocalesItems };
   const filteredLocales = { items: filteredLocaleItems };
+  // Expose the raw OPCO locale codes (without the forced en-GB injection) so
+  // child routes can distinguish "display columns" from "translation targets".
+  const opcoConfiguredLocaleCodes: string[] =
+    Array.isArray(rawOpcoLocales) && rawOpcoLocales.length > 0
+      ? (rawOpcoLocales as string[])
+      : allLocalesItems.map((l: any) => l.code);
 
   // Step 1: load envObj + environments + opcoPartners ALL in parallel —
   // none depend on each other; opcoId is already known from step 0.
@@ -347,6 +371,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     partnerRefGroups,
     locales: filteredLocales,
     allLocales,
+    opcoConfiguredLocaleCodes,
     currentUser,
     spaceId,
     spaceName,
@@ -447,6 +472,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     opcoRefGroups,
     partnerRefGroups,
     locales,
+    allLocales,
     currentUser,
     spaceId,
     spaceName,
@@ -587,150 +613,161 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   };
 
   const goToEntry = (sysId: string) => {
+    if (pathname === `/entry/${sysId}`) return;
     navigate(`/entry/${sysId}`);
+  };
+
+  const handleNavigate = (path: string) => {
+    if (pathname === path) return;
+    navigate(path);
   };
 
   return (
     <ToastProvider>
-      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
-        <AppHeader
-          spaceName={spaceName}
-          spaceId={spaceId}
-          spaceOptions={spaces.map((s) => ({ value: s.id, label: s.name }))}
-          onSpaceChange={handleSpaceChange}
-          environmentId={environmentId}
-          environments={environments}
-          currentUser={currentUser}
-          isLoading={isLoading}
-          onEnvChange={handleEnvChange}
-          opcoOptions={opcos.items.map((opco: any) => ({
-            value:
-              resolveStringField(opco.fields["id"], firstLocale) || opco.sys.id,
-            label: (resolveStringField(
-              opco.fields["internalName"],
-              firstLocale,
-            ) ||
-              resolveStringField(opco.fields["title"], firstLocale) ||
-              resolveStringField(opco.fields["id"], firstLocale) ||
-              opco.sys.id) as string,
-          }))}
-          selectedOpco={selectedOpco}
-          onOpcoChange={handleOpcoChange}
-          partnerOptions={opcoPartners.items.map((partner: any) => ({
-            value:
-              resolveStringField(partner.fields["id"], firstLocale) ||
-              partner.sys.id,
-            label: (resolveStringField(
-              partner.fields["internalName"],
-              firstLocale,
-            ) ||
-              resolveStringField(partner.fields["title"], firstLocale) ||
-              resolveStringField(partner.fields["id"], firstLocale) ||
-              partner.sys.id) as string,
-          }))}
-          selectedPartner={selectedPartner}
-          onPartnerChange={handlePartnerChange}
-        />
-
-        {/* Top progress bar */}
-        {isLoading && (
-          <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
-            <div
-              className="h-full w-1/2 bg-blue-500"
-              style={{ animation: "progress-slide 1.4s ease-in-out infinite" }}
-            />
-          </div>
-        )}
-
-        <div className="flex flex-1 overflow-hidden">
-          <AppSidebar
+      <div className="min-h-screen bg-gray-200 p-4">
+        <div className="h-[calc(100vh-2rem)] max-w-[1920px] mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
+          <AppHeader
+            spaceName={spaceName}
+            spaceId={spaceId}
+            spaceOptions={spaces.map((s) => ({ value: s.id, label: s.name }))}
+            onSpaceChange={handleSpaceChange}
+            environmentId={environmentId}
+            environments={environments}
+            currentUser={currentUser}
             isLoading={isLoading}
-            firstLocale={firstLocale}
-            locales={locales}
-            opcos={opcos}
+            onEnvChange={handleEnvChange}
+            opcoOptions={opcos.items.map((opco: any) => ({
+              value:
+                resolveStringField(opco.fields["id"], firstLocale) ||
+                opco.sys.id,
+              label: (resolveStringField(
+                opco.fields["internalName"],
+                firstLocale,
+              ) ||
+                resolveStringField(opco.fields["title"], firstLocale) ||
+                resolveStringField(opco.fields["id"], firstLocale) ||
+                opco.sys.id) as string,
+            }))}
             selectedOpco={selectedOpco}
-            opcoEntrySysId={opcoEntrySysId}
-            opcoPages={opcoPages}
-            opcoMessages={opcoMessages}
-            opcoRefGroups={opcoRefGroups}
-            opcoHasLocalizable={opcoHasLocalizable}
-            opcoExpanded={opcoExpanded}
-            onOpcoToggle={() => setOpcoExpanded((p) => !p)}
-            opcoPartners={opcoPartners}
+            onOpcoChange={handleOpcoChange}
+            partnerOptions={opcoPartners.items.map((partner: any) => ({
+              value:
+                resolveStringField(partner.fields["id"], firstLocale) ||
+                partner.sys.id,
+              label: (resolveStringField(
+                partner.fields["internalName"],
+                firstLocale,
+              ) ||
+                resolveStringField(partner.fields["title"], firstLocale) ||
+                resolveStringField(partner.fields["id"], firstLocale) ||
+                partner.sys.id) as string,
+            }))}
             selectedPartner={selectedPartner}
-            partnerEntrySysId={partnerEntrySysId}
-            partnerPages={partnerPages}
-            partnerMessages={partnerMessages}
-            partnerEmails={partnerEmails}
-            partnerRefGroups={partnerRefGroups}
-            partnerHasLocalizable={partnerHasLocalizable}
-            partnerExpanded={partnerExpanded}
-            onPartnerToggle={() => setPartnerExpanded((p) => !p)}
-            entryId={entryId}
-            pathname={pathname}
-            onNavigate={navigate}
-            onGoToEntry={goToEntry}
-            isLocalizable={isLocalizable}
-            resetKey={sidebarResetKey}
+            onPartnerChange={handlePartnerChange}
           />
 
-          {/* Main content */}
-          {isLoading ? (
-            <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+          {/* Top progress bar */}
+          {isLoading && (
+            <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
               <div
+                className="h-full w-1/2 bg-blue-500"
                 style={{
-                  animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                  animation: "progress-slide 1.4s ease-in-out infinite",
                 }}
-              >
-                <div className="mb-6">
-                  <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
-                  <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
-                  <div className="h-3 w-40 bg-gray-200 rounded" />
-                </div>
-                <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
-                  {[82, 76, 48, 52].map((w, i) => (
-                    <div
-                      key={i}
-                      className="h-4 bg-gray-200 rounded"
-                      style={{ width: w }}
-                    />
-                  ))}
-                </div>
-                <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
-                  <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
-                    <div className="h-3 w-24 bg-gray-300 rounded" />
-                    <div className="h-3 w-32 bg-gray-300 rounded" />
-                  </div>
-                  {Array.from({ length: 9 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
-                    >
-                      <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
-                      <div
-                        className="h-3 bg-gray-200 rounded"
-                        style={{ width: `${40 + ((i * 23) % 45)}%` }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </main>
-          ) : (
-            <Outlet />
+              />
+            </div>
           )}
-        </div>
 
-        <AppFooter
-          maskedToken={maskedToken}
-          cacheLastUpdated={cacheLastUpdated}
-          isLoading={isLoading}
-          onRefreshCache={() => {
-            clearCache();
-            navigate(0);
-          }}
-          cacheTtlMs={CACHE_TTL_MS}
-        />
+          <div className="flex flex-1 overflow-hidden">
+            <AppSidebar
+              isLoading={isLoading}
+              firstLocale={firstLocale}
+              locales={allLocales}
+              opcos={opcos}
+              selectedOpco={selectedOpco}
+              opcoEntrySysId={opcoEntrySysId}
+              opcoPages={opcoPages}
+              opcoMessages={opcoMessages}
+              opcoRefGroups={opcoRefGroups}
+              opcoHasLocalizable={opcoHasLocalizable}
+              opcoExpanded={opcoExpanded}
+              onOpcoToggle={() => setOpcoExpanded((p) => !p)}
+              opcoPartners={opcoPartners}
+              selectedPartner={selectedPartner}
+              partnerEntrySysId={partnerEntrySysId}
+              partnerPages={partnerPages}
+              partnerMessages={partnerMessages}
+              partnerEmails={partnerEmails}
+              partnerRefGroups={partnerRefGroups}
+              partnerHasLocalizable={partnerHasLocalizable}
+              partnerExpanded={partnerExpanded}
+              onPartnerToggle={() => setPartnerExpanded((p) => !p)}
+              entryId={entryId}
+              pathname={pathname}
+              onNavigate={handleNavigate}
+              onGoToEntry={goToEntry}
+              isLocalizable={isLocalizable}
+              resetKey={sidebarResetKey}
+            />
+
+            {/* Main content */}
+            {isLoading ? (
+              <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+                <div
+                  style={{
+                    animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                  }}
+                >
+                  <div className="mb-6">
+                    <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
+                    <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
+                    <div className="h-3 w-40 bg-gray-200 rounded" />
+                  </div>
+                  <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
+                    {[82, 76, 48, 52].map((w, i) => (
+                      <div
+                        key={i}
+                        className="h-4 bg-gray-200 rounded"
+                        style={{ width: w }}
+                      />
+                    ))}
+                  </div>
+                  <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
+                    <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
+                      <div className="h-3 w-24 bg-gray-300 rounded" />
+                      <div className="h-3 w-32 bg-gray-300 rounded" />
+                    </div>
+                    {Array.from({ length: 9 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
+                      >
+                        <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
+                        <div
+                          className="h-3 bg-gray-200 rounded"
+                          style={{ width: `${40 + ((i * 23) % 45)}%` }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </main>
+            ) : (
+              <Outlet />
+            )}
+          </div>
+
+          <AppFooter
+            maskedToken={maskedToken}
+            cacheLastUpdated={cacheLastUpdated}
+            isLoading={isLoading}
+            onRefreshCache={() => {
+              clearCache();
+              navigate(0);
+            }}
+            cacheTtlMs={CACHE_TTL_MS}
+          />
+        </div>
       </div>
     </ToastProvider>
   );

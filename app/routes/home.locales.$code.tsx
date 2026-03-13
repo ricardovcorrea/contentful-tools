@@ -10,6 +10,15 @@ type ParentLoaderData = {
       optional?: boolean;
     }[];
   };
+  allLocales: {
+    items: {
+      code: string;
+      name: string;
+      default?: boolean;
+      fallbackCode?: string | null;
+      optional?: boolean;
+    }[];
+  };
   spaceId: string;
   environmentId: string;
 };
@@ -38,8 +47,8 @@ export default function LocaleDetailPage() {
   const parentData = useRouteLoaderData("routes/home") as ParentLoaderData;
   if (!parentData) return null;
 
-  const { locales, spaceId, environmentId } = parentData;
-  const locale = locales.items.find((l) => l.code === code);
+  const { allLocales, spaceId, environmentId } = parentData;
+  const locale = allLocales.items.find((l) => l.code === code);
 
   if (!locale) {
     return (
@@ -50,7 +59,7 @@ export default function LocaleDetailPage() {
   }
 
   const fallbackLocale = locale.fallbackCode
-    ? locales.items.find((l) => l.code === locale.fallbackCode)
+    ? allLocales.items.find((l) => l.code === locale.fallbackCode)
     : null;
 
   return (

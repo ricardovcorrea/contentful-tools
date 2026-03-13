@@ -84,7 +84,9 @@ export function AppSidebar({
     () => typeof window !== "undefined" && window.innerWidth < 1024,
   );
   const envShouldBeOpen =
-    pathname === "/environment" || pathname.startsWith("/locales");
+    pathname === "/environment" ||
+    pathname === "/assets" ||
+    pathname.startsWith("/locales");
   const [envExpanded, setEnvExpanded] = useState<boolean>(true);
   const [localesExpanded, setLocalesExpanded] = useState<boolean>(false);
   const [translationsExpanded, setTranslationsExpanded] =
@@ -162,7 +164,7 @@ export function AppSidebar({
   return (
     <aside
       className={`relative shrink-0 bg-gray-100 border-r border-gray-200/60 flex flex-col overflow-hidden transition-[width] duration-200 ${
-        collapsed ? "w-14" : "w-72"
+        collapsed ? "w-24" : "w-72"
       } ${isLoading ? "opacity-50 pointer-events-none" : "opacity-100"}`}
     >
       {collapsed ? (
@@ -190,97 +192,224 @@ export function AppSidebar({
               </svg>
             </div>
           </button>
-          <nav className="flex flex-col items-stretch pt-3 pb-2 gap-1.5 flex-1 overflow-y-auto px-2">
-            {/* Environment */}
-            <button
-              onClick={() => {
-                setCollapsed(false);
-                setEnvExpanded(true);
-              }}
-              title="Environment"
-              className={`w-full flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition-all border hover:scale-105 ${
-                envShouldBeOpen
-                  ? "bg-sky-500/20 border-sky-400/40 text-sky-600 shadow-sm"
-                  : "border-transparent text-gray-400 hover:bg-sky-500/10 hover:border-sky-300/40 hover:text-sky-600"
-              }`}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
-                />
-              </svg>
-              <span className="text-[9px] font-semibold leading-none">Env</span>
-            </button>
+          <nav className="flex flex-col items-stretch pt-2 pb-2 gap-0 flex-1 overflow-y-auto">
+            {/* ── Environment ── */}
+            <div className="px-2 pt-2 pb-1">
+              <p className="text-[8px] font-bold uppercase tracking-wide text-sky-500 px-1 mb-1">
+                Environment
+              </p>
+              <div className="flex flex-col gap-0.5">
+                <button
+                  onClick={() => onNavigate("/environment")}
+                  className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    pathname === "/environment"
+                      ? "bg-sky-500/20 text-sky-700"
+                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
+                  }`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                    />
+                  </svg>
+                  <span className="text-[9px] font-semibold leading-none">
+                    Overview
+                  </span>
+                </button>
+                <button
+                  onClick={() => onNavigate("/assets")}
+                  className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    pathname === "/assets"
+                      ? "bg-sky-500/20 text-sky-700"
+                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
+                  }`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <span className="text-[9px] font-semibold leading-none">
+                    Assets
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setCollapsed(false);
+                    setEnvExpanded(true);
+                    setLocalesExpanded(true);
+                  }}
+                  className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    localeActive
+                      ? "bg-sky-500/20 text-sky-700"
+                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
+                  }`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                    />
+                  </svg>
+                  <span className="text-[9px] font-semibold leading-none">
+                    Locales
+                  </span>
+                </button>
+              </div>
+            </div>
 
-            {/* Translations */}
-            <button
-              onClick={() => {
-                setCollapsed(false);
-                setTranslationsExpanded(true);
-              }}
-              title="Translations"
-              className={`w-full flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition-all border hover:scale-105 ${
-                pathname.startsWith("/overview/")
-                  ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-700 shadow-sm"
-                  : "border-transparent text-gray-400 hover:bg-indigo-500/10 hover:border-indigo-300/40 hover:text-indigo-600"
-              }`}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                />
-              </svg>
-              <span className="text-[9px] font-semibold leading-none">
-                Trans.
-              </span>
-            </button>
+            <div className="h-px bg-gray-200/60 mx-2 my-1" />
 
-            {/* Content */}
-            <button
-              onClick={() => {
-                setCollapsed(false);
-                setContentExpanded(true);
-              }}
-              title="Content"
-              className={`w-full flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition-all border hover:scale-105 ${
-                isInOpcoSection || isInPartnerSection
-                  ? "bg-teal-500/20 border-teal-400/40 text-teal-700 shadow-sm"
-                  : "border-transparent text-gray-400 hover:bg-teal-500/10 hover:border-teal-300/40 hover:text-teal-600"
-              }`}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
-              <span className="text-[9px] font-semibold leading-none">
+            {/* ── Translations ── */}
+            <div className="px-2 pt-1 pb-1">
+              <p className="text-[8px] font-bold uppercase tracking-wide text-indigo-500 px-1 mb-1">
+                Translations
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {opcoHasLocalizable && (
+                  <button
+                    onClick={() => {
+                      setCollapsed(false);
+                      setTranslationsExpanded(true);
+                      onNavigate("/overview/opco");
+                    }}
+                    className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                      pathname.startsWith("/overview/opco")
+                        ? "bg-violet-500/20 text-violet-700"
+                        : "text-gray-500 hover:bg-indigo-500/10 hover:text-indigo-600"
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-[8px] font-extrabold uppercase tracking-tight leading-none">
+                      OPC
+                    </span>
+                    <span className="text-[9px] font-semibold leading-none">
+                      OPCO
+                    </span>
+                  </button>
+                )}
+                {partnerHasLocalizable && (
+                  <button
+                    onClick={() => {
+                      setCollapsed(false);
+                      setTranslationsExpanded(true);
+                      onNavigate("/overview/partner");
+                    }}
+                    className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                      pathname.startsWith("/overview/partner")
+                        ? "bg-emerald-500/20 text-emerald-700"
+                        : "text-gray-500 hover:bg-indigo-500/10 hover:text-indigo-600"
+                    }`}
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                    <span className="text-[9px] font-semibold leading-none">
+                      Partner
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="h-px bg-gray-200/60 mx-2 my-1" />
+
+            {/* ── Content ── */}
+            <div className="px-2 pt-1 pb-1">
+              <p className="text-[8px] font-bold uppercase tracking-wide text-teal-500 px-1 mb-1">
                 Content
-              </span>
-            </button>
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {opcoEntrySysId && (
+                  <button
+                    onClick={() => {
+                      setCollapsed(false);
+                      setContentExpanded(true);
+                      if (!opcoExpanded) onOpcoToggle();
+                      onGoToEntry(opcoEntrySysId);
+                    }}
+                    className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                      entryId === opcoEntrySysId &&
+                      !pathname.startsWith("/overview/")
+                        ? "bg-teal-500/20 text-teal-700"
+                        : "text-gray-500 hover:bg-teal-500/10 hover:text-teal-600"
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-[8px] font-extrabold uppercase tracking-tight leading-none">
+                      OPC
+                    </span>
+                    <span className="text-[9px] font-semibold leading-none">
+                      OPCO
+                    </span>
+                  </button>
+                )}
+                {partnerEntrySysId && (
+                  <button
+                    onClick={() => {
+                      setCollapsed(false);
+                      setContentExpanded(true);
+                      if (!partnerExpanded) onPartnerToggle();
+                      onGoToEntry(partnerEntrySysId);
+                    }}
+                    className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                      entryId === partnerEntrySysId &&
+                      !pathname.startsWith("/overview/")
+                        ? "bg-teal-500/20 text-teal-700"
+                        : "text-gray-500 hover:bg-teal-500/10 hover:text-teal-600"
+                    }`}
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                    <span className="text-[9px] font-semibold leading-none">
+                      Partner
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
           </nav>
         </>
       ) : (
@@ -372,10 +501,10 @@ export function AppSidebar({
                 className={`w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-sky-500/10 transition-colors border-b border-sky-200/40 ${
                   envShouldBeOpen && !envExpanded
                     ? "bg-sky-500/15 border-l-2 border-l-sky-500"
-                    : "bg-sky-500/5"
+                    : ""
                 }`}
               >
-                <div className="w-6 h-6 rounded-md bg-sky-500/15 border border-sky-400/30 flex items-center justify-center shrink-0">
+                <div className="w-6 h-6 rounded-md border border-sky-400/30 flex items-center justify-center shrink-0">
                   <svg
                     className="w-3.5 h-3.5 text-sky-600"
                     fill="none"
@@ -423,7 +552,7 @@ export function AppSidebar({
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                     }`}
                   >
-                    <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
                       <svg
                         className="w-3 h-3 text-sky-500"
                         fill="none"
@@ -453,7 +582,7 @@ export function AppSidebar({
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                       }`}
                     >
-                      <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                      <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
                         <span className="text-[8px] font-extrabold text-sky-500 uppercase tracking-tight">
                           OPC
                         </span>
@@ -474,7 +603,7 @@ export function AppSidebar({
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                       }`}
                     >
-                      <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                      <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
                         <svg
                           className="w-3 h-3 text-sky-500"
                           fill="none"
@@ -494,6 +623,35 @@ export function AppSidebar({
                       </span>
                     </button>
                   )}
+                  {/* Assets */}
+                  <button
+                    onClick={() => onNavigate("/assets")}
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      pathname === "/assets"
+                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
+                      <svg
+                        className="w-3 h-3 text-sky-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600 flex-1">
+                      Assets
+                    </span>
+                  </button>
+
                   <button
                     onClick={() => setLocalesExpanded((p) => !p)}
                     className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
@@ -502,7 +660,7 @@ export function AppSidebar({
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                     }`}
                   >
-                    <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
                       <svg
                         className="w-3 h-3 text-sky-500"
                         fill="none"
@@ -553,7 +711,7 @@ export function AppSidebar({
                                   : "border-transparent hover:bg-gray-100"
                               }`}
                             >
-                              <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                              <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
                                 <span className="text-[9px] font-bold text-sky-500 uppercase tracking-tight truncate px-0.5">
                                   {locale.code.split("-")[0]}
                                 </span>
@@ -582,9 +740,9 @@ export function AppSidebar({
             <div>
               <button
                 onClick={() => setTranslationsExpanded((p) => !p)}
-                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-indigo-500/10 transition-colors border-b border-indigo-200/40 bg-indigo-500/5"
+                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-indigo-500/10 transition-colors border-b border-indigo-200/40"
               >
-                <div className="w-6 h-6 rounded-md bg-indigo-500/15 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                <div className="w-6 h-6 rounded-md border border-indigo-400/30 flex items-center justify-center shrink-0">
                   <svg
                     className="w-3.5 h-3.5 text-indigo-600"
                     fill="none"
@@ -634,7 +792,7 @@ export function AppSidebar({
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                       }`}
                     >
-                      <div className="w-5 h-5 rounded-md bg-violet-500/10 border border-violet-400/20 flex items-center justify-center shrink-0">
+                      <div className="w-5 h-5 rounded-md border border-violet-400/20 flex items-center justify-center shrink-0">
                         <span className="text-[8px] font-extrabold text-violet-500 uppercase tracking-tight">
                           OPC
                         </span>
@@ -655,7 +813,7 @@ export function AppSidebar({
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                       }`}
                     >
-                      <div className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-400/20 flex items-center justify-center shrink-0">
+                      <div className="w-5 h-5 rounded-md border border-emerald-400/20 flex items-center justify-center shrink-0">
                         <svg
                           className="w-3 h-3 text-emerald-500"
                           fill="none"
@@ -682,9 +840,9 @@ export function AppSidebar({
             <div>
               <button
                 onClick={() => setContentExpanded((p) => !p)}
-                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-teal-500/10 transition-colors border-b border-teal-200/40 bg-teal-500/5"
+                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-teal-500/10 transition-colors border-b border-teal-200/40"
               >
-                <div className="w-6 h-6 rounded-md bg-teal-500/15 border border-teal-400/30 flex items-center justify-center shrink-0">
+                <div className="w-6 h-6 rounded-md border border-teal-400/30 flex items-center justify-center shrink-0">
                   <svg
                     className="w-3.5 h-3.5 text-teal-600"
                     fill="none"
@@ -734,7 +892,7 @@ export function AppSidebar({
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                       }`}
                     >
-                      <div className="w-5 h-5 rounded-md bg-violet-500/10 border border-violet-400/20 flex items-center justify-center shrink-0">
+                      <div className="w-5 h-5 rounded-md border border-violet-400/20 flex items-center justify-center shrink-0">
                         <span className="text-[8px] font-extrabold text-violet-500 uppercase tracking-tight">
                           OPC
                         </span>
@@ -779,24 +937,39 @@ export function AppSidebar({
                                   e.stopPropagation();
                                   onNavigate("/overview/opco/pages");
                                 }}
-                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/opco/pages" ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/opco/pages" ? "border-violet-400/80 bg-violet-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                               >
+                                <div className="w-5 h-5 rounded-md border border-violet-400/25 flex items-center justify-center shrink-0">
+                                  <svg
+                                    className="w-3 h-3 text-violet-500"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                    />
+                                  </svg>
+                                </div>
+                                <span className="text-xs font-semibold flex-1 text-violet-700">
+                                  Translation overview
+                                </span>
                                 <svg
-                                  className="w-3 h-3 shrink-0"
+                                  className="w-3 h-3 text-violet-400 shrink-0"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"
-                                  strokeWidth={2}
+                                  strokeWidth={2.5}
                                 >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                    d="M9 5l7 7-7 7"
                                   />
                                 </svg>
-                                <span className="text-[11px] font-medium">
-                                  Translation overview
-                                </span>
                               </button>
                             )}
                             <ul className="flex flex-col">
@@ -840,24 +1013,39 @@ export function AppSidebar({
                                   e.stopPropagation();
                                   onNavigate("/overview/opco/messages");
                                 }}
-                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/opco/messages" ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/opco/messages" ? "border-violet-400/80 bg-violet-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                               >
+                                <div className="w-5 h-5 rounded-md border border-violet-400/25 flex items-center justify-center shrink-0">
+                                  <svg
+                                    className="w-3 h-3 text-violet-500"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                    />
+                                  </svg>
+                                </div>
+                                <span className="text-xs font-semibold flex-1 text-violet-700">
+                                  Translation overview
+                                </span>
                                 <svg
-                                  className="w-3 h-3 shrink-0"
+                                  className="w-3 h-3 text-violet-400 shrink-0"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"
-                                  strokeWidth={2}
+                                  strokeWidth={2.5}
                                 >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                    d="M9 5l7 7-7 7"
                                   />
                                 </svg>
-                                <span className="text-[11px] font-medium">
-                                  Translation overview
-                                </span>
                               </button>
                             )}
                             <ul className="flex flex-col">
@@ -905,24 +1093,39 @@ export function AppSidebar({
                                     e.stopPropagation();
                                     onNavigate(overviewPath);
                                   }}
-                                  className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === overviewPath ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                  className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === overviewPath ? "border-violet-400/80 bg-violet-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                                 >
+                                  <div className="w-5 h-5 rounded-md border border-violet-400/25 flex items-center justify-center shrink-0">
+                                    <svg
+                                      className="w-3 h-3 text-violet-500"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                      />
+                                    </svg>
+                                  </div>
+                                  <span className="text-xs font-semibold flex-1 text-violet-700">
+                                    Translation overview
+                                  </span>
                                   <svg
-                                    className="w-3 h-3 shrink-0"
+                                    className="w-3 h-3 text-violet-400 shrink-0"
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     stroke="currentColor"
-                                    strokeWidth={2}
+                                    strokeWidth={2.5}
                                   >
                                     <path
                                       strokeLinecap="round"
                                       strokeLinejoin="round"
-                                      d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                      d="M9 5l7 7-7 7"
                                     />
                                   </svg>
-                                  <span className="text-[11px] font-medium">
-                                    Translation overview
-                                  </span>
                                 </button>
                               )}
                               <ul className="flex flex-col">
@@ -971,7 +1174,7 @@ export function AppSidebar({
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                       }`}
                     >
-                      <div className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-400/20 flex items-center justify-center shrink-0">
+                      <div className="w-5 h-5 rounded-md border border-emerald-400/20 flex items-center justify-center shrink-0">
                         <svg
                           className="w-3 h-3 text-emerald-500"
                           fill="none"
@@ -1026,24 +1229,39 @@ export function AppSidebar({
                                   e.stopPropagation();
                                   onNavigate("/overview/partner/pages");
                                 }}
-                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/pages" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/pages" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                               >
+                                <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
+                                  <svg
+                                    className="w-3 h-3 text-emerald-500"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                    />
+                                  </svg>
+                                </div>
+                                <span className="text-xs font-semibold flex-1 text-emerald-700">
+                                  Translation overview
+                                </span>
                                 <svg
-                                  className="w-3 h-3 shrink-0"
+                                  className="w-3 h-3 text-emerald-400 shrink-0"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"
-                                  strokeWidth={2}
+                                  strokeWidth={2.5}
                                 >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                    d="M9 5l7 7-7 7"
                                   />
                                 </svg>
-                                <span className="text-[11px] font-medium">
-                                  Translation overview
-                                </span>
                               </button>
                             )}
                             <ul className="flex flex-col">
@@ -1087,24 +1305,39 @@ export function AppSidebar({
                                   e.stopPropagation();
                                   onNavigate("/overview/partner/messages");
                                 }}
-                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/messages" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/messages" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                               >
+                                <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
+                                  <svg
+                                    className="w-3 h-3 text-emerald-500"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                    />
+                                  </svg>
+                                </div>
+                                <span className="text-xs font-semibold flex-1 text-emerald-700">
+                                  Translation overview
+                                </span>
                                 <svg
-                                  className="w-3 h-3 shrink-0"
+                                  className="w-3 h-3 text-emerald-400 shrink-0"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"
-                                  strokeWidth={2}
+                                  strokeWidth={2.5}
                                 >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                    d="M9 5l7 7-7 7"
                                   />
                                 </svg>
-                                <span className="text-[11px] font-medium">
-                                  Translation overview
-                                </span>
                               </button>
                             )}
                             <ul className="flex flex-col">
@@ -1148,24 +1381,39 @@ export function AppSidebar({
                                   e.stopPropagation();
                                   onNavigate("/overview/partner/emails");
                                 }}
-                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/emails" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/emails" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                               >
+                                <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
+                                  <svg
+                                    className="w-3 h-3 text-emerald-500"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                    />
+                                  </svg>
+                                </div>
+                                <span className="text-xs font-semibold flex-1 text-emerald-700">
+                                  Translation overview
+                                </span>
                                 <svg
-                                  className="w-3 h-3 shrink-0"
+                                  className="w-3 h-3 text-emerald-400 shrink-0"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"
-                                  strokeWidth={2}
+                                  strokeWidth={2.5}
                                 >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                    d="M9 5l7 7-7 7"
                                   />
                                 </svg>
-                                <span className="text-[11px] font-medium">
-                                  Translation overview
-                                </span>
                               </button>
                             )}
                             <ul className="flex flex-col">
@@ -1213,24 +1461,39 @@ export function AppSidebar({
                                     e.stopPropagation();
                                     onNavigate(overviewPath);
                                   }}
-                                  className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === overviewPath ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                  className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === overviewPath ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                                 >
+                                  <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
+                                    <svg
+                                      className="w-3 h-3 text-emerald-500"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                      />
+                                    </svg>
+                                  </div>
+                                  <span className="text-xs font-semibold flex-1 text-emerald-700">
+                                    Translation overview
+                                  </span>
                                   <svg
-                                    className="w-3 h-3 shrink-0"
+                                    className="w-3 h-3 text-emerald-400 shrink-0"
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     stroke="currentColor"
-                                    strokeWidth={2}
+                                    strokeWidth={2.5}
                                   >
                                     <path
                                       strokeLinecap="round"
                                       strokeLinejoin="round"
-                                      d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                      d="M9 5l7 7-7 7"
                                     />
                                   </svg>
-                                  <span className="text-[11px] font-medium">
-                                    Translation overview
-                                  </span>
                                 </button>
                               )}
                               <ul className="flex flex-col">
