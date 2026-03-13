@@ -122,6 +122,17 @@ export function clearCache(): void {
   // Leave in-flight requests running — they'll repopulate the fresh store.
 }
 
+/** Remove a single cache entry by key from both memory and localStorage. */
+export function invalidateCacheKey(key: string): void {
+  store.delete(key);
+  inFlight.delete(key);
+  try {
+    localStorage.removeItem(LS_PREFIX + key);
+  } catch {
+    // ignore
+  }
+}
+
 /** Returns the Unix timestamp (ms) of the last cache write, or null. */
 export function getCacheLastUpdated(): number | null {
   try {

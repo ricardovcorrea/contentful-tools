@@ -10,6 +10,7 @@ import {
 import { Editor, Frame, useNode, useEditor } from "@craftjs/core";
 import { getEntry } from "~/lib/contentful/get-entry";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
+import { useToast } from "~/lib/toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -83,27 +84,26 @@ function findEntryLinkArrayField(
   return null;
 }
 
-/** Builds a map of parentEntryId → OrderRecord from the resolved tree */
+/** Builds a map of parentEntryId → OrderRecord from the resolved tree.
+ *  IMPORTANT: originalIds must be derived from the ResolvedEntry children
+ *  arrays — not from the raw Contentful fields — because resolveTree filters
+ *  out entries that failed to fetch (returning null). If we used the raw field
+ *  arrays, any missing/deleted linked entry would cause a permanent length
+ *  mismatch and the save button would always show a false "1 change". */
 function buildOrderMap(
   root: ResolvedEntry,
   locale: string,
 ): Map<string, OrderRecord> {
   const map = new Map<string, OrderRecord>();
 
-  const sectionsLocaleMap = root.fields["sections"];
-  const sectionsVal: any[] =
-    sectionsLocaleMap?.[locale] ??
-    (sectionsLocaleMap
-      ? (Object.values(sectionsLocaleMap) as any[])[0]
-      : undefined) ??
-    [];
-  if (sectionsVal.length > 0) {
+  // Page → sections
+  if (root.children.length > 0) {
     map.set(root.id, {
       parentEntryId: root.id,
       parentDisplayName: root.displayName,
       fieldName: "sections",
       locale,
-      originalIds: sectionsVal.map((v: any) => v.sys.id as string),
+      originalIds: root.children.map((c) => c.id),
     });
   }
 
@@ -116,36 +116,25 @@ function buildOrderMap(
         containerIds,
       );
       if (fieldName) {
-        const lm = (section.fields as any)[fieldName];
-        const val: any[] =
-          lm?.[locale] ?? (Object.values(lm ?? {}) as any[])[0] ?? [];
-        if (val.length > 0) {
-          map.set(section.id, {
-            parentEntryId: section.id,
-            parentDisplayName: section.displayName,
-            fieldName,
-            locale,
-            originalIds: val.map((v: any) => v.sys.id as string),
-          });
-        }
+        map.set(section.id, {
+          parentEntryId: section.id,
+          parentDisplayName: section.displayName,
+          fieldName,
+          locale,
+          originalIds: containerIds,
+        });
       }
     }
 
     for (const container of section.children) {
-      const compLocaleMap = container.fields["components"];
-      const compVal: any[] =
-        compLocaleMap?.[locale] ??
-        (compLocaleMap
-          ? (Object.values(compLocaleMap) as any[])[0]
-          : undefined) ??
-        [];
-      if (compVal.length > 0) {
+      const compIds = container.children.map((c) => c.id);
+      if (compIds.length > 0) {
         map.set(container.id, {
           parentEntryId: container.id,
           parentDisplayName: container.displayName,
           fieldName: "components",
           locale,
-          originalIds: compVal.map((v: any) => v.sys.id as string),
+          originalIds: compIds,
         });
       }
     }
@@ -1288,6 +1277,8 @@ function FieldValueCell({
   );
 }
 
+type PropTab = "common" | "all" | string; // string = a locale code
+
 function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
   const { selectedId, nodeProps, nodeRole, actions } = useEditor((state) => {
     const id = [...state.events.selected][0];
@@ -1303,21 +1294,34 @@ function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
   const { entryId, contentTypeId, displayName, fields } =
     (nodeProps as any) ?? {};
 
-  // Collect all locale keys present across all fields
-  const allLocales = useMemo(() => {
-    const s = new Set<string>();
-    for (const localeMap of Object.values(fields ?? {})) {
-      for (const k of Object.keys((localeMap as any) ?? {})) s.add(k);
+  // Derive all unique locale keys and split fields into translatable / common
+  const { allLocales, translatableFields, commonFields } = useMemo(() => {
+    const localeSet = new Set<string>();
+    const trans: [string, any][] = [];
+    const common: [string, any][] = [];
+    for (const [fieldId, localeMap] of Object.entries(fields ?? {})) {
+      const keys = Object.keys((localeMap as any) ?? {});
+      keys.forEach((k) => localeSet.add(k));
+      if (keys.length > 1) {
+        trans.push([fieldId, localeMap]);
+      } else {
+        common.push([fieldId, localeMap]);
+      }
     }
-    return s.size > 0 ? [...s] : [defaultLocale];
+    const locales = localeSet.size > 0 ? [...localeSet] : [defaultLocale];
+    return {
+      allLocales: locales,
+      translatableFields: trans,
+      commonFields: common,
+    };
   }, [fields, defaultLocale]);
 
-  const [activeLocale, setActiveLocale] = useState(defaultLocale);
+  const hasTranslatable = translatableFields.length > 0;
+  const [activeTab, setActiveTab] = useState<PropTab>("common");
 
-  // Keep active locale valid when node changes
-  const resolvedLocale = allLocales.includes(activeLocale)
-    ? activeLocale
-    : (allLocales[0] ?? defaultLocale);
+  // Ensure the active tab is valid when the selected node changes
+  const validTabs: PropTab[] = ["common", "all", ...allLocales];
+  const resolvedTab = validTabs.includes(activeTab) ? activeTab : "common";
 
   if (!nodeProps || !selectedId) {
     return (
@@ -1350,12 +1354,43 @@ function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
   const badge =
     roleColor[nodeRole ?? ""] ?? "bg-gray-100 text-gray-500 border-gray-200";
 
-  const fieldEntries = Object.entries(fields ?? {});
+  function tabCls(tab: PropTab) {
+    return `px-3 py-2 text-xs font-semibold rounded-t-lg whitespace-nowrap transition-colors ${
+      resolvedTab === tab
+        ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
+        : "text-gray-500 hover:text-gray-700"
+    }`;
+  }
+
+  function FieldRow({
+    fieldId,
+    localeMap,
+    locale,
+  }: {
+    fieldId: string;
+    localeMap: any;
+    locale: string;
+  }) {
+    const val =
+      localeMap?.[locale] ?? (Object.values(localeMap ?? {}) as any[])[0];
+    return (
+      <div className="flex flex-col gap-0.5 py-2 border-b border-gray-200 last:border-0">
+        <label className="font-mono text-[10px] text-gray-400">{fieldId}</label>
+        <FieldValueCell
+          fieldId={fieldId}
+          val={val}
+          activeLocale={locale}
+          selectedId={selectedId!}
+          actions={actions}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col">
       {/* Header */}
-      <div className="px-4 py-3 flex flex-col gap-2 border-b border-gray-100">
+      <div className="px-4 py-3 flex flex-col gap-2 border-b border-gray-200">
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className={`text-[9px] font-semibold border px-1.5 py-0.5 rounded uppercase tracking-widest ${badge}`}
@@ -1379,18 +1414,23 @@ function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
         </div>
       </div>
 
-      {/* Locale tabs — only show when there are multiple locales */}
-      {allLocales.length > 1 && (
-        <div className="flex border-b border-gray-100 bg-gray-50 shrink-0 overflow-x-auto">
+      {/* Tab bar — only when there are translatable fields */}
+      {hasTranslatable && (
+        <div className="flex gap-0.5 border-b border-gray-300 px-2 pt-1 overflow-x-auto shrink-0 bg-gray-50">
+          <button
+            onClick={() => setActiveTab("common")}
+            className={tabCls("common")}
+          >
+            Common Fields
+          </button>
+          <button onClick={() => setActiveTab("all")} className={tabCls("all")}>
+            All locales
+          </button>
           {allLocales.map((loc) => (
             <button
               key={loc}
-              onClick={() => setActiveLocale(loc)}
-              className={`px-3 py-1.5 text-[10px] font-mono font-medium whitespace-nowrap transition-colors ${
-                resolvedLocale === loc
-                  ? "text-gray-800 border-b-2 border-gray-700 bg-white"
-                  : "text-gray-400 hover:text-gray-600"
-              }`}
+              onClick={() => setActiveTab(loc)}
+              className={tabCls(loc)}
             >
               {loc}
             </button>
@@ -1398,38 +1438,103 @@ function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
         </div>
       )}
 
-      {/* Fields for active locale */}
-      <div className="px-4 py-3 flex flex-col gap-3">
-        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest">
-          Fields
-          {allLocales.length === 1 && (
-            <span className="ml-1.5 normal-case font-mono font-normal">
-              ({resolvedLocale})
-            </span>
-          )}
-        </p>
-        {fieldEntries.length === 0 && (
-          <p className="text-xs text-gray-400 italic">No fields</p>
-        )}
-        {fieldEntries.map(([fieldId, localeMap]) => {
-          const val =
-            (localeMap as any)?.[resolvedLocale] ??
-            (Object.values((localeMap as any) ?? {}) as any[])[0];
-          return (
-            <div key={fieldId} className="flex flex-col gap-0.5">
-              <label className="font-mono text-[10px] text-gray-400">
-                {fieldId}
-              </label>
-              <FieldValueCell
+      {/* Field content */}
+      <div className="px-4 py-1 overflow-y-auto">
+        {/* No translatable fields — flat list */}
+        {!hasTranslatable && (
+          <>
+            {Object.entries(fields ?? {}).length === 0 && (
+              <p className="text-xs text-gray-400 italic py-4">No fields</p>
+            )}
+            {Object.entries(fields ?? {}).map(([fieldId, localeMap]) => (
+              <FieldRow
+                key={fieldId}
                 fieldId={fieldId}
-                val={val}
-                activeLocale={resolvedLocale}
-                selectedId={selectedId}
-                actions={actions}
+                localeMap={localeMap}
+                locale={allLocales[0] ?? defaultLocale}
               />
-            </div>
-          );
-        })}
+            ))}
+          </>
+        )}
+
+        {/* Common Fields tab — non-translatable */}
+        {hasTranslatable && resolvedTab === "common" && (
+          <>
+            {commonFields.length === 0 && (
+              <p className="text-xs text-gray-400 italic py-4">
+                No non-translatable fields
+              </p>
+            )}
+            {commonFields.map(([fieldId, localeMap]) => (
+              <FieldRow
+                key={fieldId}
+                fieldId={fieldId}
+                localeMap={localeMap}
+                locale={
+                  Object.keys(localeMap ?? {})[0] ??
+                  allLocales[0] ??
+                  defaultLocale
+                }
+              />
+            ))}
+          </>
+        )}
+
+        {/* All locales tab — translatable fields × each locale stacked */}
+        {hasTranslatable && resolvedTab === "all" && (
+          <>
+            {translatableFields.length === 0 && (
+              <p className="text-xs text-gray-400 italic py-4">
+                No translatable fields
+              </p>
+            )}
+            {translatableFields.map(([fieldId, localeMap]) => (
+              <div
+                key={fieldId}
+                className="py-2 border-b border-gray-200 last:border-0 flex flex-col gap-2"
+              >
+                <label className="font-mono text-[10px] text-gray-400">
+                  {fieldId}
+                </label>
+                {allLocales.map((loc) => (
+                  <div key={loc} className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-semibold text-gray-300 uppercase tracking-widest">
+                      {loc}
+                    </span>
+                    <FieldValueCell
+                      fieldId={fieldId}
+                      val={(localeMap as any)?.[loc] ?? null}
+                      activeLocale={loc}
+                      selectedId={selectedId}
+                      actions={actions}
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Per-locale tab — only translatable fields for that locale */}
+        {hasTranslatable &&
+          resolvedTab !== "common" &&
+          resolvedTab !== "all" && (
+            <>
+              {translatableFields.length === 0 && (
+                <p className="text-xs text-gray-400 italic py-4">
+                  No translatable fields
+                </p>
+              )}
+              {translatableFields.map(([fieldId, localeMap]) => (
+                <FieldRow
+                  key={fieldId}
+                  fieldId={fieldId}
+                  localeMap={localeMap}
+                  locale={resolvedTab}
+                />
+              ))}
+            </>
+          )}
       </div>
     </div>
   );
@@ -1957,6 +2062,7 @@ export function PageEditorTab({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
+  const { addToast } = useToast();
 
   function adjustZoom(delta: number) {
     setZoom((z) =>
@@ -2032,8 +2138,11 @@ export function PageEditorTab({
         }
         return next;
       });
+      addToast("Page order saved as draft.", "success");
     } catch (err: any) {
-      setSaveError(err?.message ?? "Save failed");
+      const msg = err?.message ?? "Save failed";
+      setSaveError(msg);
+      addToast(msg, "error");
     } finally {
       setSaving(false);
     }

@@ -7,72 +7,59 @@ import {
 import { LoadingScreen } from "~/components/loading-screen";
 
 export function meta() {
-  return [{ title: "Login — Avios - Content tools" }];
+  return [{ title: "Sign in — Avios Content Tools" }];
 }
 
 type Space = { sys: { id: string }; name: string };
 type Environment = { sys: { id: string } };
-type Step = "token" | "workspace";
+type Step = "token" | "space" | "environment";
 
 export default function Login() {
   const navigate = useNavigate();
 
-  // Token step
   const [step, setStep] = useState<Step>("token");
+
+  // Step 1 — token
   const [token, setToken] = useState("");
   const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Workspace step
+  // Step 2 — space
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [selectedSpaceId, setSelectedSpaceId] = useState("");
+  const [isLoadingSpaces, setIsLoadingSpaces] = useState(false);
+
+  // Step 3 — environment
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState("");
-  const [isLoadingSpaces, setIsLoadingSpaces] = useState(false);
   const [isLoadingEnvironments, setIsLoadingEnvironments] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // ── Step 1: validate token + load spaces ───────────────────────────────────
+  // ── Step 1: validate token + load spaces ─────────────────────────────────
   const handleTokenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token.trim()) return;
-
     setIsValidating(true);
     setError(null);
-
     try {
       localStorage.setItem("contentfulManagementToken", token.trim());
       clearContentfulManagementClient();
       const client = getContentfulManagementClient();
-
-      // Validate token
       await client.getCurrentUser();
 
-      // Load spaces
       setIsLoadingSpaces(true);
       const spacesResult = await client.getSpaces();
       const spaceItems = spacesResult.items as unknown as Space[];
       setSpaces(spaceItems);
 
-      const preferredSpace =
-        spaceItems.find((s) => s.name.toLowerCase().includes("vouchers")) ??
+      const lastSpaceId = localStorage.getItem("contentfulSpaceId");
+      const preferred =
+        (lastSpaceId && spaceItems.find((s) => s.sys.id === lastSpaceId)) ||
+        spaceItems.find((s) => s.name.toLowerCase().includes("vouchers")) ||
         spaceItems[0];
-      const firstSpaceId = preferredSpace?.sys.id ?? "";
-      setSelectedSpaceId(firstSpaceId);
-
-      // Load environments for the preferred space
-      if (firstSpaceId) {
-        const space = await client.getSpace(firstSpaceId);
-        const envResult = await space.getEnvironments();
-        const envItems = envResult.items as unknown as Environment[];
-        setEnvironments(envItems);
-        const preferredEnv =
-          envItems.find((e) => e.sys.id === "test-vouchers-tools") ??
-          envItems[0];
-        setSelectedEnvironmentId(preferredEnv?.sys.id ?? "master");
-      }
-
-      setStep("workspace");
+      setSelectedSpaceId(preferred?.sys.id ?? "");
+      setStep("space");
     } catch {
       setError(
         "Invalid token. Please check your Contentful Management API token and try again.",
@@ -85,21 +72,25 @@ export default function Login() {
     }
   };
 
-  // ── When the space selector changes, reload environments ───────────────────
-  const handleSpaceChange = async (spaceId: string) => {
-    setSelectedSpaceId(spaceId);
-    setEnvironments([]);
-    setSelectedEnvironmentId("");
+  // ── Step 2: select space, then load environments ──────────────────────────
+  const handleSpaceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSpaceId) return;
     setIsLoadingEnvironments(true);
+    setError(null);
     try {
       const client = getContentfulManagementClient();
-      const space = await client.getSpace(spaceId);
+      const space = await client.getSpace(selectedSpaceId);
       const envResult = await space.getEnvironments();
       const envItems = envResult.items as unknown as Environment[];
       setEnvironments(envItems);
-      const preferredEnv =
-        envItems.find((e) => e.sys.id === "test-vouchers-tools") ?? envItems[0];
-      setSelectedEnvironmentId(preferredEnv?.sys.id ?? "master");
+      const lastEnvId = localStorage.getItem("contentfulEnvironment");
+      const preferred =
+        (lastEnvId && envItems.find((e) => e.sys.id === lastEnvId)) ||
+        envItems.find((e) => e.sys.id === "test-voucher-tools") ||
+        envItems[0];
+      setSelectedEnvironmentId(preferred?.sys.id ?? "master");
+      setStep("environment");
     } catch {
       setError("Failed to load environments for the selected space.");
     } finally {
@@ -107,170 +98,363 @@ export default function Login() {
     }
   };
 
-  // ── Step 2: save workspace and continue ────────────────────────────────────
-  const handleWorkspaceSubmit = (e: React.FormEvent) => {
+  // ── Step 3: save and navigate ─────────────────────────────────────────────
+  const handleEnvironmentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSpaceId || !selectedEnvironmentId) return;
-
     localStorage.setItem("contentfulSpaceId", selectedSpaceId);
     localStorage.setItem("contentfulEnvironment", selectedEnvironmentId);
-
     setIsSuccess(true);
     navigate("/");
   };
 
-  if (isSuccess) {
-    return <LoadingScreen />;
-  }
+  if (isSuccess) return <LoadingScreen />;
+
+  const selectedSpace = spaces.find((s) => s.sys.id === selectedSpaceId);
+  const stepIndex: Record<Step, number> = {
+    token: 0,
+    space: 1,
+    environment: 2,
+  };
+  const current = stepIndex[step];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-gray-100 border-b border-gray-200 px-8 py-4 shadow-sm">
-        <h1 className="text-xl font-bold text-gray-900">
-          Avios - Content tools
-        </h1>
-      </header>
-
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="w-full max-w-md bg-gray-100 rounded-2xl shadow-sm border border-gray-200 p-8 flex flex-col gap-6">
-          {/* Step indicator */}
-          <div className="flex items-center gap-2">
-            <StepDot
-              active={step === "token"}
-              done={step === "workspace"}
-              label="1"
-            />
-            <div className="flex-1 h-px bg-gray-300" />
-            <StepDot active={step === "workspace"} done={isSuccess} label="2" />
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-8">
+        <div className="w-full max-w-md flex flex-col gap-8">
+          {/* Logo */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-16 h-16 rounded-2xl bg-blue-500 flex items-center justify-center shadow-md shadow-blue-500/30">
+              <svg
+                className="w-8 h-8 text-white"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path d="M10 1.5a1 1 0 011 1v4.086l2.893-2.893a1 1 0 111.414 1.414L12.414 8H16.5a1 1 0 010 2h-4.086l2.893 2.893a1 1 0 01-1.414 1.414L11 11.414V15.5a1 1 0 01-2 0v-4.086l-2.893 2.893a1 1 0 01-1.414-1.414L7.586 10H3.5a1 1 0 010-2h4.086L4.693 5.107a1 1 0 011.414-1.414L9 6.586V2.5a1 1 0 011-1z" />
+              </svg>
+            </div>
+            <div className="text-center leading-tight">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                Avios
+              </p>
+              <p className="text-xl font-bold text-gray-900">Content Tools</p>
+            </div>
           </div>
 
-          {step === "token" ? (
-            <>
-              <div className="flex flex-col gap-1">
-                <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
-                <p className="text-sm text-gray-600">
-                  Enter your Contentful Management API token to continue.
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleTokenSubmit}
-                className="flex flex-col gap-4"
-              >
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="token"
-                    className="text-xs font-medium text-gray-700 uppercase tracking-wide"
+          {/* Step tracker */}
+          <div className="relative flex items-start justify-between">
+            <div
+              className={`absolute left-4 right-4 top-4 h-px transition-colors duration-300 ${current > 0 ? "bg-blue-400" : "bg-gray-300"}`}
+            />
+            {(["token", "space", "environment"] as Step[]).map((s, i) => {
+              const done = i < current;
+              const active = i === current;
+              const labels = ["API Token", "Space", "Environment"];
+              return (
+                <div
+                  key={s}
+                  className="flex flex-col items-center gap-1.5 relative z-10"
+                >
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 ${
+                      done
+                        ? "bg-blue-500 text-white shadow-sm shadow-blue-500/40"
+                        : active
+                          ? "bg-white border-2 border-blue-500 text-blue-600 shadow-sm shadow-blue-500/20"
+                          : "bg-gray-200 text-gray-400"
+                    }`}
                   >
-                    Management API Token
-                  </label>
-                  <input
-                    id="token"
-                    type="password"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    placeholder="CFPAT-..."
-                    autoComplete="off"
-                    disabled={isValidating}
-                    className="w-full rounded-lg border border-gray-300 bg-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Generate a token in{" "}
+                    {done ? (
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    ) : (
+                      i + 1
+                    )}
+                  </div>
+                  <span
+                    className={`text-[10px] font-semibold tracking-wide whitespace-nowrap ${
+                      active
+                        ? "text-blue-600"
+                        : done
+                          ? "text-gray-500"
+                          : "text-gray-400"
+                    }`}
+                  >
+                    {labels[i]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            {/* ── Step 1: Token ── */}
+            {step === "token" && (
+              <>
+                <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg
+                        className="w-5 h-5 text-blue-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900">
+                        Management API Token
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        Required to authenticate with Contentful's Management
+                        API and access your spaces and content.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <form
+                  onSubmit={handleTokenSubmit}
+                  className="px-6 py-5 flex flex-col gap-4"
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="token"
+                      className="text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      CMA Token
+                    </label>
+                    <input
+                      id="token"
+                      type="password"
+                      value={token}
+                      onChange={(e) => setToken(e.target.value)}
+                      placeholder="CFPAT-…"
+                      autoComplete="off"
+                      autoFocus
+                      disabled={isValidating || isLoadingSpaces}
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 font-mono placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Don't have a token? Generate one under{" "}
                     <a
                       href="https://app.contentful.com/account/profile/cma_tokens"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-blue-400 hover:underline"
+                      className="text-blue-500 hover:underline"
                     >
-                      Contentful Settings → API keys
+                      Contentful → Profile → API keys → CMA tokens
                     </a>
                     .
                   </p>
-                </div>
-
-                {error && (
-                  <div className="rounded-lg bg-red-900/30 border border-red-500/40 px-4 py-3 text-sm text-red-400">
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={!token.trim() || isValidating || isLoadingSpaces}
-                  className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {isLoadingSpaces ? (
-                    <>
-                      <Spinner />
-                      Loading spaces…
-                    </>
-                  ) : isValidating ? (
-                    <>
-                      <Spinner />
-                      Validating…
-                    </>
-                  ) : (
-                    "Continue"
-                  )}
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col gap-1">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Select workspace
-                </h2>
-                <p className="text-sm text-gray-600">
-                  Choose the space and environment to connect to.
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleWorkspaceSubmit}
-                className="flex flex-col gap-4"
-              >
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="space"
-                    className="text-xs font-medium text-gray-700 uppercase tracking-wide"
+                  {error && <ErrorBanner message={error} />}
+                  <button
+                    type="submit"
+                    disabled={!token.trim() || isValidating || isLoadingSpaces}
+                    className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                   >
-                    Space
-                  </label>
-                  <select
-                    id="space"
-                    value={selectedSpaceId}
-                    onChange={(e) => handleSpaceChange(e.target.value)}
-                    disabled={isLoadingEnvironments || isSuccess}
-                    className="w-full rounded-lg border border-gray-300 bg-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-wait"
-                  >
-                    {spaces.map((space) => (
-                      <option key={space.sys.id} value={space.sys.id}>
-                        {space.name} ({space.sys.id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    {isLoadingSpaces ? (
+                      <>
+                        <Spinner />
+                        Loading spaces…
+                      </>
+                    ) : isValidating ? (
+                      <>
+                        <Spinner />
+                        Validating token…
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight />
+                      </>
+                    )}
+                  </button>
+                </form>
+              </>
+            )}
 
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="environment"
-                    className="text-xs font-medium text-gray-700 uppercase tracking-wide"
-                  >
-                    Environment
-                  </label>
-                  {isLoadingEnvironments ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-500 px-3 py-2.5">
-                      <Spinner />
-                      Loading environments…
+            {/* ── Step 2: Space ── */}
+            {step === "space" && (
+              <>
+                <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg
+                        className="w-5 h-5 text-violet-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M3 7h18M3 12h18M3 17h18"
+                        />
+                      </svg>
                     </div>
-                  ) : (
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900">
+                        Select Space
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        A Contentful space is your content repository. Choose
+                        the space that contains the Avios partner and OPCO
+                        content.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <form
+                  onSubmit={handleSpaceSubmit}
+                  className="px-6 py-5 flex flex-col gap-4"
+                >
+                  <SummaryChip label="Token" value={`${token.slice(0, 10)}…`} />
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="space"
+                      className="text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Space
+                    </label>
+                    <select
+                      id="space"
+                      value={selectedSpaceId}
+                      onChange={(e) => setSelectedSpaceId(e.target.value)}
+                      disabled={isLoadingEnvironments}
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-wait transition-shadow"
+                    >
+                      {spaces.map((s) => (
+                        <option key={s.sys.id} value={s.sys.id}>
+                          {s.name} — {s.sys.id}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-400">
+                      {spaces.length} space{spaces.length !== 1 ? "s" : ""}{" "}
+                      accessible with your token.
+                    </p>
+                  </div>
+                  {error && <ErrorBanner message={error} />}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep("token");
+                        setError(null);
+                      }}
+                      className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 focus:outline-none transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!selectedSpaceId || isLoadingEnvironments}
+                      className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                    >
+                      {isLoadingEnvironments ? (
+                        <>
+                          <Spinner />
+                          Loading environments…
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* ── Step 3: Environment ── */}
+            {step === "environment" && (
+              <>
+                <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg
+                        className="w-5 h-5 text-emerald-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 12h14M12 5l7 7-7 7"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900">
+                        Select Environment
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        Environments let you work in isolation before promoting
+                        to{" "}
+                        <code className="bg-gray-100 px-1 rounded text-gray-600 text-[10px]">
+                          master
+                        </code>
+                        . Choose the environment to connect to.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <form
+                  onSubmit={handleEnvironmentSubmit}
+                  className="px-6 py-5 flex flex-col gap-4"
+                >
+                  <div className="flex flex-col gap-2">
+                    <SummaryChip
+                      label="Token"
+                      value={`${token.slice(0, 10)}…`}
+                    />
+                    <SummaryChip
+                      label="Space"
+                      value={
+                        selectedSpace
+                          ? `${selectedSpace.name} (${selectedSpace.sys.id})`
+                          : selectedSpaceId
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="environment"
+                      className="text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Environment
+                    </label>
                     <select
                       id="environment"
                       value={selectedEnvironmentId}
                       onChange={(e) => setSelectedEnvironmentId(e.target.value)}
                       disabled={environments.length === 0 || isSuccess}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
                     >
                       {environments.map((env) => (
                         <option key={env.sys.id} value={env.sys.id}>
@@ -278,115 +462,134 @@ export default function Login() {
                         </option>
                       ))}
                     </select>
-                  )}
-                </div>
-
-                {error && (
-                  <div className="rounded-lg bg-red-900/30 border border-red-500/40 px-4 py-3 text-sm text-red-400">
-                    {error}
+                    <p className="text-xs text-gray-400">
+                      {environments.length} environment
+                      {environments.length !== 1 ? "s" : ""} available in this
+                      space.
+                    </p>
                   </div>
-                )}
+                  {error && <ErrorBanner message={error} />}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep("space");
+                        setError(null);
+                      }}
+                      className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 focus:outline-none transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={
+                        !selectedSpaceId || !selectedEnvironmentId || isSuccess
+                      }
+                      className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                    >
+                      {isSuccess ? (
+                        <>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Redirecting…
+                        </>
+                      ) : (
+                        "Connect"
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
 
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep("token");
-                      setError(null);
-                    }}
-                    className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 focus:outline-none transition-colors"
-                  >
-                    Back
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={
-                      !selectedSpaceId ||
-                      !selectedEnvironmentId ||
-                      isLoadingEnvironments ||
-                      isSuccess
-                    }
-                    className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 ${
-                      isSuccess
-                        ? "bg-green-500 focus:ring-green-500"
-                        : "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 disabled:opacity-50"
-                    }`}
-                  >
-                    {isSuccess ? (
-                      <>
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2.5}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                        Redirecting…
-                      </>
-                    ) : (
-                      "Continue"
-                    )}
-                  </button>
-                </div>
-              </form>
-            </>
-          )}
+          {/* Privacy note */}
+          <p className="text-center text-xs text-gray-400 leading-relaxed">
+            Credentials are stored only in your browser. Pressing{" "}
+            <span className="font-medium text-gray-500">Logout</span> clears
+            everything.
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-function StepDot({
-  active,
-  done,
-  label,
-}: {
-  active: boolean;
-  done: boolean;
-  label: string;
-}) {
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SummaryChip({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-        done
-          ? "bg-green-500 text-white"
-          : active
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-500"
-      }`}
-    >
-      {done ? (
-        <svg
-          className="w-3.5 h-3.5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M5 13l4 4L19 7"
-          />
-        </svg>
-      ) : (
-        label
-      )}
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
+        {label}
+      </span>
+      <span className="text-xs font-mono text-gray-600 truncate">{value}</span>
+      <svg
+        className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.5}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
     </div>
+  );
+}
+
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2.5">
+      <svg
+        className="w-4 h-4 text-red-400 shrink-0 mt-0.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+        />
+      </svg>
+      <p className="text-sm text-red-600">{message}</p>
+    </div>
+  );
+}
+
+function ArrowRight() {
+  return (
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
   );
 }
 
 function Spinner() {
   return (
-    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+    <svg
+      className="w-4 h-4 animate-spin shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
       <circle
         className="opacity-25"
         cx="12"

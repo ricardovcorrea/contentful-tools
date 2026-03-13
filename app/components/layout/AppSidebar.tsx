@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AccordionSection } from "~/components/AccordionSection";
-import { FancyPicker } from "~/components/ui/FancyPicker";
 import type { RefGroup } from "~/lib/contentful/get-entry-tree";
+import { resolveStringField } from "~/lib/resolve-string-field";
 
 interface EntryCollection {
   items: any[];
@@ -10,6 +10,7 @@ interface EntryCollection {
 interface Props {
   isLoading: boolean;
   firstLocale: string;
+  locales: { items: { code: string; name: string; default?: boolean }[] };
   // OPCO
   opcos: EntryCollection;
   selectedOpco: string;
@@ -20,7 +21,6 @@ interface Props {
   opcoHasLocalizable: boolean;
   opcoExpanded: boolean;
   onOpcoToggle: () => void;
-  onOpcoChange: (id: string) => void;
   // Partner
   opcoPartners: EntryCollection;
   selectedPartner: string;
@@ -32,7 +32,6 @@ interface Props {
   partnerHasLocalizable: boolean;
   partnerExpanded: boolean;
   onPartnerToggle: () => void;
-  onPartnerChange: (id: string) => void;
   // Navigation
   entryId: string | undefined;
   pathname: string;
@@ -40,15 +39,21 @@ interface Props {
   onGoToEntry: (sysId: string) => void;
   // Localizable checker
   isLocalizable: (items: any[]) => boolean;
+  // Reset signal — increment to collapse all sections
+  resetKey?: number;
 }
 
 function getName(fields: Record<string, any>, locale: string) {
-  return fields["internalName"]?.[locale] ?? fields["title"]?.[locale] ?? null;
+  const name =
+    resolveStringField(fields["internalName"], locale) ||
+    resolveStringField(fields["title"], locale);
+  return name || null;
 }
 
 export function AppSidebar({
   isLoading,
   firstLocale,
+  locales,
   opcos,
   selectedOpco,
   opcoEntrySysId,
@@ -58,7 +63,6 @@ export function AppSidebar({
   opcoHasLocalizable,
   opcoExpanded,
   onOpcoToggle,
-  onOpcoChange,
   opcoPartners,
   selectedPartner,
   partnerEntrySysId,
@@ -69,104 +73,333 @@ export function AppSidebar({
   partnerHasLocalizable,
   partnerExpanded,
   onPartnerToggle,
-  onPartnerChange,
   entryId,
   pathname,
   onNavigate,
   onGoToEntry,
   isLocalizable,
+  resetKey,
 }: Props) {
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 1024,
   );
+  const envShouldBeOpen =
+    pathname === "/environment" || pathname.startsWith("/locales");
+  const [envExpanded, setEnvExpanded] = useState<boolean>(true);
+  const [localesExpanded, setLocalesExpanded] = useState<boolean>(false);
+  const [translationsExpanded, setTranslationsExpanded] =
+    useState<boolean>(false);
+  const [contentExpanded, setContentExpanded] = useState<boolean>(false);
+
+  const localeActive = pathname.startsWith("/locales/");
+
+  // An entry belongs to the OPCO section when it's within OPCO data and not on an overview route.
+  const isInOpcoSection =
+    !!entryId &&
+    !pathname.startsWith("/overview/") &&
+    (entryId === opcoEntrySysId ||
+      opcoPages.items.some((i: any) => i.sys.id === entryId) ||
+      opcoMessages.items.some((i: any) => i.sys.id === entryId) ||
+      opcoRefGroups.some((g) =>
+        g.items.some((i: any) => i.sys.id === entryId),
+      ));
+
+  const isInPartnerSection =
+    !!entryId &&
+    !pathname.startsWith("/overview/") &&
+    (entryId === partnerEntrySysId ||
+      partnerPages.items.some((i: any) => i.sys.id === entryId) ||
+      partnerMessages.items.some((i: any) => i.sys.id === entryId) ||
+      partnerEmails.items.some((i: any) => i.sys.id === entryId) ||
+      partnerRefGroups.some((g) =>
+        g.items.some((i: any) => i.sys.id === entryId),
+      ));
+
+  useEffect(() => {
+    if (localeActive) setLocalesExpanded(true);
+  }, [localeActive]);
+
+  // Auto-expand env section when navigating to an env child page.
+  useEffect(() => {
+    if (envShouldBeOpen) {
+      setEnvExpanded(true);
+    }
+  }, [envShouldBeOpen]);
+
+  // Auto-expand Translations section when on an overview route.
+  const isOnOverview = pathname.startsWith("/overview/");
+  useEffect(() => {
+    if (isOnOverview) setTranslationsExpanded(true);
+  }, [isOnOverview]);
+
+  // Auto-expand Content + OPCO sub-section when navigating to an OPCO entry.
+  useEffect(() => {
+    if (isInOpcoSection) {
+      setContentExpanded(true);
+      if (!opcoExpanded) onOpcoToggle();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInOpcoSection]);
+
+  // Auto-expand Content + Partner sub-section when navigating to a Partner entry.
+  useEffect(() => {
+    if (isInPartnerSection) {
+      setContentExpanded(true);
+      if (!partnerExpanded) onPartnerToggle();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInPartnerSection]);
+
+  // Collapse non-env sections when OPCO/Partner changes.
+  useEffect(() => {
+    if (!resetKey) return;
+    setLocalesExpanded(false);
+    setTranslationsExpanded(false);
+    setContentExpanded(false);
+    setEnvExpanded(true);
+  }, [resetKey]);
 
   return (
     <aside
-      className={`relative shrink-0 bg-gray-100 border-r border-gray-200/60 flex flex-col overflow-visible transition-[width] duration-200 ${
-        collapsed ? "w-0" : "w-100"
+      className={`relative shrink-0 bg-gray-100 border-r border-gray-200/60 flex flex-col overflow-hidden transition-[width] duration-200 ${
+        collapsed ? "w-14" : "w-72"
       } ${isLoading ? "opacity-50 pointer-events-none" : "opacity-100"}`}
     >
-      {/* Floating collapse tab on right edge */}
-      <button
-        onClick={() => setCollapsed((c) => !c)}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute top-1/2 -right-5 -translate-y-1/2 z-20 flex flex-col items-center justify-center w-5 h-16 rounded-r-lg bg-gray-200 hover:bg-gray-300 border border-l-0 border-gray-300 shadow-sm transition-colors group"
-      >
-        <svg
-          className={`w-3 h-3 text-gray-500 group-hover:text-gray-700 transition-transform duration-200 ${
-            collapsed ? "rotate-180" : ""
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-      </button>
-
-      {!collapsed && (
+      {collapsed ? (
+        /* ── Mini icon rail – one icon per main section ── */
         <>
-          {/* Context pickers */}
-          <div className="shrink-0 border-b border-gray-200/50">
-            <div className="px-3 pt-3 pb-2 border-b border-gray-200/40">
-              <FancyPicker
-                label="OPCO"
-                value={selectedOpco}
-                options={opcos.items.map((opco) => ({
-                  value: opco.fields["id"]?.[firstLocale] ?? opco.sys.id,
-                  label: (getName(opco.fields, firstLocale) ??
-                    opco.fields["id"]?.[firstLocale] ??
-                    opco.sys.id) as string,
-                }))}
-                onChange={onOpcoChange}
-                disabled={isLoading}
-                accentClass="text-violet-400 bg-violet-500/15 border-violet-500/30"
-              />
+          {/* Top expand button – collapsed state */}
+          <button
+            onClick={() => setCollapsed(false)}
+            title="Expand sidebar"
+            className="flex items-center justify-center w-full h-11 border-b border-gray-200/60 bg-gray-100 hover:bg-gray-200/60 text-gray-400 hover:text-gray-600 transition-colors shrink-0 group"
+          >
+            <div className="w-7 h-7 rounded-lg border border-gray-300/60 bg-gray-50 group-hover:border-gray-400/60 group-hover:bg-white flex items-center justify-center transition-all">
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                />
+              </svg>
             </div>
-            <div className="px-3 pt-2.5 pb-3">
-              <FancyPicker
-                label="Partner"
-                value={selectedPartner}
-                options={opcoPartners.items.map((partner) => ({
-                  value: partner.fields["id"]?.[firstLocale] ?? partner.sys.id,
-                  label: (getName(partner.fields, firstLocale) ??
-                    partner.fields["id"]?.[firstLocale] ??
-                    partner.sys.id) as string,
-                }))}
-                onChange={onPartnerChange}
-                disabled={isLoading}
-                accentClass="text-emerald-400 bg-emerald-500/15 border-emerald-500/30"
-              />
+          </button>
+          <nav className="flex flex-col items-stretch pt-3 pb-2 gap-1.5 flex-1 overflow-y-auto px-2">
+            {/* Environment */}
+            <button
+              onClick={() => {
+                setCollapsed(false);
+                setEnvExpanded(true);
+              }}
+              title="Environment"
+              className={`w-full flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition-all border hover:scale-105 ${
+                envShouldBeOpen
+                  ? "bg-sky-500/20 border-sky-400/40 text-sky-600 shadow-sm"
+                  : "border-transparent text-gray-400 hover:bg-sky-500/10 hover:border-sky-300/40 hover:text-sky-600"
+              }`}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+                />
+              </svg>
+              <span className="text-[9px] font-semibold leading-none">Env</span>
+            </button>
+
+            {/* Translations */}
+            <button
+              onClick={() => {
+                setCollapsed(false);
+                setTranslationsExpanded(true);
+              }}
+              title="Translations"
+              className={`w-full flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition-all border hover:scale-105 ${
+                pathname.startsWith("/overview/")
+                  ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-700 shadow-sm"
+                  : "border-transparent text-gray-400 hover:bg-indigo-500/10 hover:border-indigo-300/40 hover:text-indigo-600"
+              }`}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                />
+              </svg>
+              <span className="text-[9px] font-semibold leading-none">
+                Trans.
+              </span>
+            </button>
+
+            {/* Content */}
+            <button
+              onClick={() => {
+                setCollapsed(false);
+                setContentExpanded(true);
+              }}
+              title="Content"
+              className={`w-full flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition-all border hover:scale-105 ${
+                isInOpcoSection || isInPartnerSection
+                  ? "bg-teal-500/20 border-teal-400/40 text-teal-700 shadow-sm"
+                  : "border-transparent text-gray-400 hover:bg-teal-500/10 hover:border-teal-300/40 hover:text-teal-600"
+              }`}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
+              </svg>
+              <span className="text-[9px] font-semibold leading-none">
+                Content
+              </span>
+            </button>
+          </nav>
+        </>
+      ) : (
+        <>
+          {/* Top header strip – expanded state */}
+          <div className="flex items-center justify-between px-3 h-11 border-b border-gray-200/60 bg-gray-100 shrink-0">
+            {/* Collapse sidebar – icon only, left side */}
+            <button
+              onClick={() => setCollapsed(true)}
+              title="Collapse sidebar"
+              className="flex items-center justify-center w-6 h-6 rounded border border-transparent text-gray-300 hover:border-gray-300/60 hover:bg-gray-50 hover:text-gray-500 transition-all"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M11 19l-7-7 7-7M19 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+            {/* Collapse all / Expand all – right side */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  setEnvExpanded(false);
+                  setLocalesExpanded(false);
+                  setTranslationsExpanded(false);
+                  setContentExpanded(false);
+                  if (opcoExpanded) onOpcoToggle();
+                  if (partnerExpanded) onPartnerToggle();
+                }}
+                title="Collapse all sections"
+                className="flex items-center justify-center w-6 h-6 rounded border border-transparent text-gray-300 hover:border-gray-300/60 hover:bg-gray-50 hover:text-gray-500 transition-all"
+              >
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 15l7-7 7 7"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={() => {
+                  setEnvExpanded(true);
+                  setLocalesExpanded(true);
+                  setTranslationsExpanded(true);
+                  setContentExpanded(true);
+                  if (!opcoExpanded) onOpcoToggle();
+                  if (!partnerExpanded) onPartnerToggle();
+                }}
+                title="Expand all sections"
+                className="flex items-center justify-center w-6 h-6 rounded border border-transparent text-gray-300 hover:border-gray-300/60 hover:bg-gray-50 hover:text-gray-500 transition-all"
+              >
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
             </div>
           </div>
-
           {/* Content list */}
           <div className="flex-1 overflow-y-auto">
-            {/* OPCO section */}
+            {/* Environment section */}
             <div>
               <button
-                onClick={onOpcoToggle}
-                className="w-full flex items-center gap-2 px-3 pt-4 pb-2 group hover:bg-gray-200/40 transition-colors"
+                onClick={() => setEnvExpanded((p) => !p)}
+                className={`w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-sky-500/10 transition-colors border-b border-sky-200/40 ${
+                  envShouldBeOpen && !envExpanded
+                    ? "bg-sky-500/15 border-l-2 border-l-sky-500"
+                    : "bg-sky-500/5"
+                }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
-                  OPCO
-                </span>
-                <span className="text-xs text-gray-600 font-medium truncate flex-1 text-left">
-                  {selectedOpco}
-                </span>
-                <span className="text-[11px] text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full shrink-0">
-                  {opcoPages.items.length +
-                    opcoMessages.items.length +
-                    opcoRefGroups.reduce((a, g) => a + g.items.length, 0)}
-                </span>
+                <div className="w-6 h-6 rounded-md bg-sky-500/15 border border-sky-400/30 flex items-center justify-center shrink-0">
+                  <svg
+                    className="w-3.5 h-3.5 text-sky-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-[10px] font-bold text-sky-600 uppercase tracking-widest leading-none mb-0.5">
+                    Environment
+                  </p>
+                  <p className="text-xs font-semibold text-gray-700 truncate leading-tight">
+                    Space configuration
+                  </p>
+                </div>
                 <svg
-                  className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${opcoExpanded ? "" : "-rotate-90"}`}
+                  className={`w-3.5 h-3.5 text-sky-400 shrink-0 transition-transform duration-200 ${envExpanded ? "" : "-rotate-90"}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -180,19 +413,19 @@ export function AppSidebar({
                 </svg>
               </button>
 
-              {opcoExpanded && (
+              {envExpanded && (
                 <>
-                  {opcoEntrySysId && (
-                    <button
-                      onClick={() => onGoToEntry(opcoEntrySysId)}
-                      className={`w-full text-left flex items-center gap-2 px-3 py-2 border-l-2 transition-colors ${
-                        entryId === opcoEntrySysId
-                          ? "border-violet-500 bg-violet-500/10 text-violet-700"
-                          : "border-transparent text-gray-500 hover:bg-gray-200/60 hover:text-gray-700"
-                      }`}
-                    >
+                  <button
+                    onClick={() => onNavigate("/environment")}
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      pathname === "/environment"
+                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
                       <svg
-                        className="w-3.5 h-3.5 shrink-0"
+                        className="w-3 h-3 text-sky-500"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -201,22 +434,77 @@ export function AppSidebar({
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                          d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
                         />
                       </svg>
-                      <span className="text-xs font-semibold uppercase tracking-widest">
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600">
+                      Overview
+                    </span>
+                  </button>
+
+                  {opcoEntrySysId && (
+                    <button
+                      onClick={() => onGoToEntry(opcoEntrySysId)}
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                        entryId === opcoEntrySysId &&
+                        !pathname.startsWith("/overview/")
+                          ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                          : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      }`}
+                    >
+                      <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                        <span className="text-[8px] font-extrabold text-sky-500 uppercase tracking-tight">
+                          OPC
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600">
                         OPCO
                       </span>
                     </button>
                   )}
 
-                  {opcoHasLocalizable && (
+                  {partnerEntrySysId && (
                     <button
-                      onClick={() => onNavigate("/overview/opco")}
-                      className={`w-full text-left flex items-center gap-2 px-3 py-2 border-l-2 transition-colors ${pathname === "/overview/opco" ? "border-violet-500 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-500 hover:bg-gray-200/60 hover:text-gray-700"}`}
+                      onClick={() => onGoToEntry(partnerEntrySysId)}
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                        entryId === partnerEntrySysId &&
+                        !pathname.startsWith("/overview/")
+                          ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                          : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      }`}
                     >
+                      <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                        <svg
+                          className="w-3 h-3 text-sky-500"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600">
+                        Partner
+                      </span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setLocalesExpanded((p) => !p)}
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      localeActive
+                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
                       <svg
-                        className="w-3.5 h-3.5 shrink-0"
+                        className="w-3 h-3 text-sky-500"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -225,229 +513,102 @@ export function AppSidebar({
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                          d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
                         />
                       </svg>
-                      <span className="text-xs font-semibold uppercase tracking-widest">
-                        Translation overview
-                      </span>
-                    </button>
-                  )}
-
-                  {opcoPages.items.length > 0 && (
-                    <AccordionSection
-                      label="Pages"
-                      count={opcoPages.items.length}
-                      defaultOpen
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600 flex-1">
+                      Locales
+                    </span>
+                    <span className="text-[11px] text-sky-500 tabular-nums font-semibold bg-sky-500/10 border border-sky-300/30 px-1.5 py-0.5 rounded-full shrink-0">
+                      {locales.items.length}
+                    </span>
+                    <svg
+                      className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${localesExpanded ? "" : "-rotate-90"}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
                     >
-                      {isLocalizable(opcoPages.items) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigate("/overview/opco/pages");
-                          }}
-                          className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/opco/pages" ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
-                        >
-                          <svg
-                            className="w-3 h-3 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3 10h18M3 6h18M3 14h18M3 18h18"
-                            />
-                          </svg>
-                          <span className="text-[11px] font-medium">
-                            Translation overview
-                          </span>
-                        </button>
-                      )}
-                      <ul className="flex flex-col">
-                        {opcoPages.items.map((page: any) => {
-                          const active = entryId === page.sys.id;
-                          return (
-                            <li key={page.sys.id}>
-                              <button
-                                onClick={() => onGoToEntry(page.sys.id)}
-                                className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                              >
-                                <div className="min-w-0">
-                                  <p
-                                    className={`text-sm font-medium leading-tight truncate ${active ? "text-blue-700" : "text-gray-700"}`}
-                                  >
-                                    {getName(page.fields, firstLocale) ??
-                                      page.sys.id}
-                                  </p>
-                                  <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                    {page.sys.id}
-                                  </p>
-                                </div>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </AccordionSection>
-                  )}
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
 
-                  {opcoMessages.items.length > 0 && (
-                    <AccordionSection
-                      label="Messages"
-                      count={opcoMessages.items.length}
-                    >
-                      {isLocalizable(opcoMessages.items) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigate("/overview/opco/messages");
-                          }}
-                          className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/opco/messages" ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
-                        >
-                          <svg
-                            className="w-3 h-3 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3 10h18M3 6h18M3 14h18M3 18h18"
-                            />
-                          </svg>
-                          <span className="text-[11px] font-medium">
-                            Translation overview
-                          </span>
-                        </button>
-                      )}
-                      <ul className="flex flex-col">
-                        {opcoMessages.items.map((msg: any) => {
-                          const active = entryId === msg.sys.id;
-                          return (
-                            <li key={msg.sys.id}>
-                              <button
-                                onClick={() => onGoToEntry(msg.sys.id)}
-                                className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                              >
-                                <div className="min-w-0">
-                                  <p
-                                    className={`text-sm font-medium leading-tight truncate ${active ? "text-blue-700" : "text-gray-700"}`}
-                                  >
-                                    {getName(msg.fields, firstLocale) ??
-                                      msg.sys.id}
-                                  </p>
-                                  <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                    {msg.sys.id}
-                                  </p>
-                                </div>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </AccordionSection>
-                  )}
-
-                  {opcoRefGroups.map((refGroup) => {
-                    if (refGroup.items.length === 0) return null;
-                    const overviewPath = `/overview/opco/${refGroup.slug}`;
-                    return (
-                      <AccordionSection
-                        key={`ref-opco-${refGroup.contentTypeId}`}
-                        label={refGroup.label}
-                        count={refGroup.items.length}
-                      >
-                        {isLocalizable(refGroup.items) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNavigate(overviewPath);
-                            }}
-                            className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === overviewPath ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
-                          >
-                            <svg
-                              className="w-3 h-3 shrink-0"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
+                  {localesExpanded && (
+                    <ul className="flex flex-col">
+                      {locales.items.map((locale) => {
+                        const localePath = `/locales/${locale.code}`;
+                        const active = pathname === localePath;
+                        return (
+                          <li key={locale.code}>
+                            <button
+                              onClick={() => onNavigate(localePath)}
+                              className={`w-full text-left flex items-center gap-2 pl-5 pr-2.5 py-1.5 border-l-2 transition-colors ${
+                                active
+                                  ? "border-sky-500 bg-sky-500/10"
+                                  : "border-transparent hover:bg-gray-100"
+                              }`}
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M3 10h18M3 6h18M3 14h18M3 18h18"
-                              />
-                            </svg>
-                            <span className="text-[11px] font-medium">
-                              Translation overview
-                            </span>
-                          </button>
-                        )}
-                        <ul className="flex flex-col">
-                          {refGroup.items.map((item: any) => {
-                            const active = entryId === item.sys.id;
-                            return (
-                              <li key={item.sys.id}>
-                                <button
-                                  onClick={() => onGoToEntry(item.sys.id)}
-                                  className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                                >
-                                  <div className="min-w-0">
-                                    <p
-                                      className={`text-sm font-medium leading-tight truncate ${active ? "text-blue-700" : "text-gray-700"}`}
-                                    >
-                                      {getName(item.fields, firstLocale) ??
-                                        item.sys.id}
-                                    </p>
-                                    <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                      {item.sys.id}
-                                    </p>
-                                  </div>
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </AccordionSection>
-                    );
-                  })}
+                              <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-400/20 flex items-center justify-center shrink-0">
+                                <span className="text-[9px] font-bold text-sky-500 uppercase tracking-tight truncate px-0.5">
+                                  {locale.code.split("-")[0]}
+                                </span>
+                              </div>
+                              <span
+                                className={`text-xs font-semibold truncate flex-1 ${active ? "text-sky-700" : "text-gray-600"}`}
+                              >
+                                {locale.name}
+                              </span>
+                              {locale.default && (
+                                <span className="text-[9px] font-bold uppercase tracking-wide bg-sky-500/10 text-sky-600 border border-sky-300/40 px-1 py-0 rounded shrink-0">
+                                  default
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </>
               )}
             </div>
 
-            {/* Partner section */}
-            <div className="border-t border-gray-200/50 mt-2">
+            {/* Translations section */}
+            <div>
               <button
-                onClick={onPartnerToggle}
-                className="w-full flex items-center gap-2 px-3 pt-4 pb-2 group hover:bg-gray-200/40 transition-colors"
+                onClick={() => setTranslationsExpanded((p) => !p)}
+                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-indigo-500/10 transition-colors border-b border-indigo-200/40 bg-indigo-500/5"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
-                  Partner
-                </span>
-                <span className="text-xs text-gray-600 font-medium truncate flex-1 text-left">
-                  {getName(
-                    opcoPartners.items.find(
-                      (p: any) =>
-                        (p.fields["id"]?.[firstLocale] ?? p.fields["id"]) ===
-                        selectedPartner,
-                    )?.fields ?? {},
-                    firstLocale,
-                  ) ?? selectedPartner}
-                </span>
-                <span className="text-[11px] text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full shrink-0">
-                  {partnerPages.items.length +
-                    partnerMessages.items.length +
-                    partnerEmails.items.length +
-                    partnerRefGroups.reduce((a, g) => a + g.items.length, 0)}
-                </span>
+                <div className="w-6 h-6 rounded-md bg-indigo-500/15 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                  <svg
+                    className="w-3.5 h-3.5 text-indigo-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none mb-0.5">
+                    Translations
+                  </p>
+                  <p className="text-xs text-gray-500 truncate leading-tight">
+                    OPCO & Partner overviews
+                  </p>
+                </div>
                 <svg
-                  className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${partnerExpanded ? "" : "-rotate-90"}`}
+                  className={`w-3.5 h-3.5 text-indigo-400 shrink-0 transition-transform duration-200 ${translationsExpanded ? "" : "-rotate-90"}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -461,28 +622,25 @@ export function AppSidebar({
                 </svg>
               </button>
 
-              {partnerExpanded && (
+              {translationsExpanded && (
                 <>
-                  {partnerEntrySysId && (
+                  {opcoHasLocalizable && (
                     <button
-                      onClick={() => onGoToEntry(partnerEntrySysId)}
-                      className={`w-full text-left flex items-center gap-2 px-3 py-2 border-l-2 transition-colors ${entryId === partnerEntrySysId ? "border-emerald-500 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-500 hover:bg-gray-200/60 hover:text-gray-700"}`}
+                      onClick={() => onNavigate("/overview/opco")}
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                        pathname === "/overview/opco" ||
+                        pathname.startsWith("/overview/opco/")
+                          ? "border-violet-500 bg-violet-500/10 text-violet-700"
+                          : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      }`}
                     >
-                      <svg
-                        className="w-3.5 h-3.5 shrink-0"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                      </svg>
-                      <span className="text-xs font-semibold uppercase tracking-widest">
-                        Partner
+                      <div className="w-5 h-5 rounded-md bg-violet-500/10 border border-violet-400/20 flex items-center justify-center shrink-0">
+                        <span className="text-[8px] font-extrabold text-violet-500 uppercase tracking-tight">
+                          OPC
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600">
+                        OPCO
                       </span>
                     </button>
                   )}
@@ -490,267 +648,626 @@ export function AppSidebar({
                   {partnerHasLocalizable && (
                     <button
                       onClick={() => onNavigate("/overview/partner")}
-                      className={`w-full text-left flex items-center gap-2 px-3 py-2 border-l-2 transition-colors ${pathname === "/overview/partner" ? "border-emerald-500 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-500 hover:bg-gray-200/60 hover:text-gray-700"}`}
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                        pathname === "/overview/partner" ||
+                        pathname.startsWith("/overview/partner/")
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-700"
+                          : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      }`}
                     >
+                      <div className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-400/20 flex items-center justify-center shrink-0">
+                        <svg
+                          className="w-3 h-3 text-emerald-500"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600">
+                        Partner
+                      </span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            {/* Content section */}
+            <div>
+              <button
+                onClick={() => setContentExpanded((p) => !p)}
+                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-teal-500/10 transition-colors border-b border-teal-200/40 bg-teal-500/5"
+              >
+                <div className="w-6 h-6 rounded-md bg-teal-500/15 border border-teal-400/30 flex items-center justify-center shrink-0">
+                  <svg
+                    className="w-3.5 h-3.5 text-teal-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-[10px] font-bold text-teal-600 uppercase tracking-widest leading-none mb-0.5">
+                    Content
+                  </p>
+                  <p className="text-xs text-gray-500 truncate leading-tight">
+                    OPCO & Partner entries
+                  </p>
+                </div>
+                <svg
+                  className={`w-3.5 h-3.5 text-teal-400 shrink-0 transition-transform duration-200 ${contentExpanded ? "" : "-rotate-90"}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+
+              {contentExpanded && (
+                <>
+                  {/* OPCO section */}
+                  <div>
+                    <button
+                      onClick={onOpcoToggle}
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                        isInOpcoSection
+                          ? "border-violet-500 bg-violet-500/10 text-violet-700"
+                          : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      }`}
+                    >
+                      <div className="w-5 h-5 rounded-md bg-violet-500/10 border border-violet-400/20 flex items-center justify-center shrink-0">
+                        <span className="text-[8px] font-extrabold text-violet-500 uppercase tracking-tight">
+                          OPC
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600 flex-1 truncate">
+                        {getName(
+                          opcos.items.find(
+                            (o: any) =>
+                              (resolveStringField(
+                                o.fields["id"],
+                                firstLocale,
+                              ) || o.sys.id) === selectedOpco,
+                          )?.fields ?? {},
+                          firstLocale,
+                        ) ?? selectedOpco}
+                      </span>
                       <svg
-                        className="w-3.5 h-3.5 shrink-0"
+                        className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${opcoExpanded ? "" : "-rotate-90"}`}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
-                        strokeWidth={2}
+                        strokeWidth={2.5}
                       >
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                          d="M19 9l-7 7-7-7"
                         />
                       </svg>
-                      <span className="text-xs font-semibold uppercase tracking-widest">
-                        Translation overview
-                      </span>
                     </button>
-                  )}
 
-                  {partnerPages.items.length > 0 && (
-                    <AccordionSection
-                      label="Pages"
-                      count={partnerPages.items.length}
-                    >
-                      {isLocalizable(partnerPages.items) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigate("/overview/partner/pages");
-                          }}
-                          className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/pages" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
-                        >
-                          <svg
-                            className="w-3 h-3 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
+                    {opcoExpanded && (
+                      <>
+                        {opcoPages.items.length > 0 && (
+                          <AccordionSection
+                            label="Pages"
+                            count={opcoPages.items.length}
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3 10h18M3 6h18M3 14h18M3 18h18"
-                            />
-                          </svg>
-                          <span className="text-[11px] font-medium">
-                            Translation overview
-                          </span>
-                        </button>
-                      )}
-                      <ul className="flex flex-col">
-                        {partnerPages.items.map((page: any) => {
-                          const active = entryId === page.sys.id;
-                          return (
-                            <li key={page.sys.id}>
+                            {isLocalizable(opcoPages.items) && (
                               <button
-                                onClick={() => onGoToEntry(page.sys.id)}
-                                className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNavigate("/overview/opco/pages");
+                                }}
+                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/opco/pages" ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
                               >
-                                <div className="min-w-0">
-                                  <p
-                                    className={`text-sm font-medium leading-tight truncate ${active ? "text-blue-700" : "text-gray-700"}`}
-                                  >
-                                    {getName(page.fields, firstLocale) ??
-                                      page.sys.id}
-                                  </p>
-                                  <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                    {page.sys.id}
-                                  </p>
-                                </div>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </AccordionSection>
-                  )}
-
-                  {partnerMessages.items.length > 0 && (
-                    <AccordionSection
-                      label="Messages"
-                      count={partnerMessages.items.length}
-                    >
-                      {isLocalizable(partnerMessages.items) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigate("/overview/partner/messages");
-                          }}
-                          className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/messages" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
-                        >
-                          <svg
-                            className="w-3 h-3 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3 10h18M3 6h18M3 14h18M3 18h18"
-                            />
-                          </svg>
-                          <span className="text-[11px] font-medium">
-                            Translation overview
-                          </span>
-                        </button>
-                      )}
-                      <ul className="flex flex-col">
-                        {partnerMessages.items.map((msg: any) => {
-                          const active = entryId === msg.sys.id;
-                          return (
-                            <li key={msg.sys.id}>
-                              <button
-                                onClick={() => onGoToEntry(msg.sys.id)}
-                                className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                              >
-                                <div className="min-w-0">
-                                  <p
-                                    className={`text-sm font-medium leading-tight truncate ${active ? "text-blue-700" : "text-gray-700"}`}
-                                  >
-                                    {getName(msg.fields, firstLocale) ??
-                                      msg.sys.id}
-                                  </p>
-                                  <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                    {msg.sys.id}
-                                  </p>
-                                </div>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </AccordionSection>
-                  )}
-
-                  {partnerEmails.items.length > 0 && (
-                    <AccordionSection
-                      label="Emails"
-                      count={partnerEmails.items.length}
-                    >
-                      {isLocalizable(partnerEmails.items) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigate("/overview/partner/emails");
-                          }}
-                          className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/emails" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
-                        >
-                          <svg
-                            className="w-3 h-3 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3 10h18M3 6h18M3 14h18M3 18h18"
-                            />
-                          </svg>
-                          <span className="text-[11px] font-medium">
-                            Translation overview
-                          </span>
-                        </button>
-                      )}
-                      <ul className="flex flex-col">
-                        {partnerEmails.items.map((email: any) => {
-                          const active = entryId === email.sys.id;
-                          return (
-                            <li key={email.sys.id}>
-                              <button
-                                onClick={() => onGoToEntry(email.sys.id)}
-                                className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                              >
-                                <div className="min-w-0">
-                                  <p
-                                    className={`text-sm font-medium leading-tight truncate ${active ? "text-blue-700" : "text-gray-700"}`}
-                                  >
-                                    {getName(email.fields, firstLocale) ??
-                                      email.sys.id}
-                                  </p>
-                                  <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                    {email.sys.id}
-                                  </p>
-                                </div>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </AccordionSection>
-                  )}
-
-                  {partnerRefGroups.map((refGroup) => {
-                    if (refGroup.items.length === 0) return null;
-                    const overviewPath = `/overview/partner/${refGroup.slug}`;
-                    return (
-                      <AccordionSection
-                        key={`ref-partner-${refGroup.contentTypeId}`}
-                        label={refGroup.label}
-                        count={refGroup.items.length}
-                      >
-                        {isLocalizable(refGroup.items) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNavigate(overviewPath);
-                            }}
-                            className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === overviewPath ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
-                          >
-                            <svg
-                              className="w-3 h-3 shrink-0"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M3 10h18M3 6h18M3 14h18M3 18h18"
-                              />
-                            </svg>
-                            <span className="text-[11px] font-medium">
-                              Translation overview
-                            </span>
-                          </button>
-                        )}
-                        <ul className="flex flex-col">
-                          {refGroup.items.map((item: any) => {
-                            const active = entryId === item.sys.id;
-                            return (
-                              <li key={item.sys.id}>
-                                <button
-                                  onClick={() => onGoToEntry(item.sys.id)}
-                                  className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                <svg
+                                  className="w-3 h-3 shrink-0"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
                                 >
-                                  <div className="min-w-0">
-                                    <p
-                                      className={`text-sm font-medium leading-tight truncate ${active ? "text-blue-700" : "text-gray-700"}`}
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                  />
+                                </svg>
+                                <span className="text-[11px] font-medium">
+                                  Translation overview
+                                </span>
+                              </button>
+                            )}
+                            <ul className="flex flex-col">
+                              {opcoPages.items.map((page: any) => {
+                                const active =
+                                  entryId === page.sys.id &&
+                                  !pathname.startsWith("/overview/");
+                                return (
+                                  <li key={page.sys.id}>
+                                    <button
+                                      onClick={() => onGoToEntry(page.sys.id)}
+                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
                                     >
-                                      {getName(item.fields, firstLocale) ??
-                                        item.sys.id}
-                                    </p>
-                                    <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                      {item.sys.id}
-                                    </p>
-                                  </div>
+                                      <div className="min-w-0">
+                                        <p
+                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                        >
+                                          {getName(page.fields, firstLocale) ??
+                                            page.sys.id}
+                                        </p>
+                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                          {page.sys.id}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </AccordionSection>
+                        )}
+
+                        {opcoMessages.items.length > 0 && (
+                          <AccordionSection
+                            label="Messages"
+                            count={opcoMessages.items.length}
+                          >
+                            {isLocalizable(opcoMessages.items) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNavigate("/overview/opco/messages");
+                                }}
+                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/opco/messages" ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                              >
+                                <svg
+                                  className="w-3 h-3 shrink-0"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                  />
+                                </svg>
+                                <span className="text-[11px] font-medium">
+                                  Translation overview
+                                </span>
+                              </button>
+                            )}
+                            <ul className="flex flex-col">
+                              {opcoMessages.items.map((msg: any) => {
+                                const active =
+                                  entryId === msg.sys.id &&
+                                  !pathname.startsWith("/overview/");
+                                return (
+                                  <li key={msg.sys.id}>
+                                    <button
+                                      onClick={() => onGoToEntry(msg.sys.id)}
+                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                    >
+                                      <div className="min-w-0">
+                                        <p
+                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                        >
+                                          {getName(msg.fields, firstLocale) ??
+                                            msg.sys.id}
+                                        </p>
+                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                          {msg.sys.id}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </AccordionSection>
+                        )}
+
+                        {opcoRefGroups.map((refGroup) => {
+                          if (refGroup.items.length === 0) return null;
+                          const overviewPath = `/overview/opco/${refGroup.slug}`;
+                          return (
+                            <AccordionSection
+                              key={`ref-opco-${refGroup.contentTypeId}`}
+                              label={refGroup.label}
+                              count={refGroup.items.length}
+                            >
+                              {isLocalizable(refGroup.items) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onNavigate(overviewPath);
+                                  }}
+                                  className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === overviewPath ? "border-violet-400 bg-violet-500/10 text-violet-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                >
+                                  <svg
+                                    className="w-3 h-3 shrink-0"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                    />
+                                  </svg>
+                                  <span className="text-[11px] font-medium">
+                                    Translation overview
+                                  </span>
                                 </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </AccordionSection>
-                    );
-                  })}
+                              )}
+                              <ul className="flex flex-col">
+                                {refGroup.items.map((item: any) => {
+                                  const active =
+                                    entryId === item.sys.id &&
+                                    !pathname.startsWith("/overview/");
+                                  return (
+                                    <li key={item.sys.id}>
+                                      <button
+                                        onClick={() => onGoToEntry(item.sys.id)}
+                                        className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                      >
+                                        <div className="min-w-0">
+                                          <p
+                                            className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                          >
+                                            {getName(
+                                              item.fields,
+                                              firstLocale,
+                                            ) ?? item.sys.id}
+                                          </p>
+                                          <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                            {item.sys.id}
+                                          </p>
+                                        </div>
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </AccordionSection>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Partner section */}
+                  <div>
+                    <button
+                      onClick={onPartnerToggle}
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                        isInPartnerSection
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-700"
+                          : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      }`}
+                    >
+                      <div className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-400/20 flex items-center justify-center shrink-0">
+                        <svg
+                          className="w-3 h-3 text-emerald-500"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-xs font-semibold text-gray-600 flex-1 truncate">
+                        {getName(
+                          opcoPartners.items.find(
+                            (p: any) =>
+                              (resolveStringField(
+                                p.fields["id"],
+                                firstLocale,
+                              ) || p.sys.id) === selectedPartner,
+                          )?.fields ?? {},
+                          firstLocale,
+                        ) ?? selectedPartner}
+                      </span>
+                      <svg
+                        className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${partnerExpanded ? "" : "-rotate-90"}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
+
+                    {partnerExpanded && (
+                      <>
+                        {partnerPages.items.length > 0 && (
+                          <AccordionSection
+                            label="Pages"
+                            count={partnerPages.items.length}
+                          >
+                            {isLocalizable(partnerPages.items) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNavigate("/overview/partner/pages");
+                                }}
+                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/pages" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                              >
+                                <svg
+                                  className="w-3 h-3 shrink-0"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                  />
+                                </svg>
+                                <span className="text-[11px] font-medium">
+                                  Translation overview
+                                </span>
+                              </button>
+                            )}
+                            <ul className="flex flex-col">
+                              {partnerPages.items.map((page: any) => {
+                                const active =
+                                  entryId === page.sys.id &&
+                                  !pathname.startsWith("/overview/");
+                                return (
+                                  <li key={page.sys.id}>
+                                    <button
+                                      onClick={() => onGoToEntry(page.sys.id)}
+                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                    >
+                                      <div className="min-w-0">
+                                        <p
+                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                        >
+                                          {getName(page.fields, firstLocale) ??
+                                            page.sys.id}
+                                        </p>
+                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                          {page.sys.id}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </AccordionSection>
+                        )}
+
+                        {partnerMessages.items.length > 0 && (
+                          <AccordionSection
+                            label="Messages"
+                            count={partnerMessages.items.length}
+                          >
+                            {isLocalizable(partnerMessages.items) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNavigate("/overview/partner/messages");
+                                }}
+                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/messages" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                              >
+                                <svg
+                                  className="w-3 h-3 shrink-0"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                  />
+                                </svg>
+                                <span className="text-[11px] font-medium">
+                                  Translation overview
+                                </span>
+                              </button>
+                            )}
+                            <ul className="flex flex-col">
+                              {partnerMessages.items.map((msg: any) => {
+                                const active =
+                                  entryId === msg.sys.id &&
+                                  !pathname.startsWith("/overview/");
+                                return (
+                                  <li key={msg.sys.id}>
+                                    <button
+                                      onClick={() => onGoToEntry(msg.sys.id)}
+                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                    >
+                                      <div className="min-w-0">
+                                        <p
+                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                        >
+                                          {getName(msg.fields, firstLocale) ??
+                                            msg.sys.id}
+                                        </p>
+                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                          {msg.sys.id}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </AccordionSection>
+                        )}
+
+                        {partnerEmails.items.length > 0 && (
+                          <AccordionSection
+                            label="Emails"
+                            count={partnerEmails.items.length}
+                          >
+                            {isLocalizable(partnerEmails.items) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNavigate("/overview/partner/emails");
+                                }}
+                                className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === "/overview/partner/emails" ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                              >
+                                <svg
+                                  className="w-3 h-3 shrink-0"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                  />
+                                </svg>
+                                <span className="text-[11px] font-medium">
+                                  Translation overview
+                                </span>
+                              </button>
+                            )}
+                            <ul className="flex flex-col">
+                              {partnerEmails.items.map((email: any) => {
+                                const active =
+                                  entryId === email.sys.id &&
+                                  !pathname.startsWith("/overview/");
+                                return (
+                                  <li key={email.sys.id}>
+                                    <button
+                                      onClick={() => onGoToEntry(email.sys.id)}
+                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                    >
+                                      <div className="min-w-0">
+                                        <p
+                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                        >
+                                          {getName(email.fields, firstLocale) ??
+                                            email.sys.id}
+                                        </p>
+                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                          {email.sys.id}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </AccordionSection>
+                        )}
+
+                        {partnerRefGroups.map((refGroup) => {
+                          if (refGroup.items.length === 0) return null;
+                          const overviewPath = `/overview/partner/${refGroup.slug}`;
+                          return (
+                            <AccordionSection
+                              key={`ref-partner-${refGroup.contentTypeId}`}
+                              label={refGroup.label}
+                              count={refGroup.items.length}
+                            >
+                              {isLocalizable(refGroup.items) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onNavigate(overviewPath);
+                                  }}
+                                  className={`-mx-4 w-[calc(100%+2rem)] text-left flex items-center gap-1.5 px-4 py-1.5 mb-2 border-l-2 transition-colors ${pathname === overviewPath ? "border-emerald-400 bg-emerald-500/10 text-emerald-700" : "border-transparent text-gray-600 hover:bg-gray-200/40 hover:text-gray-400"}`}
+                                >
+                                  <svg
+                                    className="w-3 h-3 shrink-0"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M3 10h18M3 6h18M3 14h18M3 18h18"
+                                    />
+                                  </svg>
+                                  <span className="text-[11px] font-medium">
+                                    Translation overview
+                                  </span>
+                                </button>
+                              )}
+                              <ul className="flex flex-col">
+                                {refGroup.items.map((item: any) => {
+                                  const active =
+                                    entryId === item.sys.id &&
+                                    !pathname.startsWith("/overview/");
+                                  return (
+                                    <li key={item.sys.id}>
+                                      <button
+                                        onClick={() => onGoToEntry(item.sys.id)}
+                                        className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                      >
+                                        <div className="min-w-0">
+                                          <p
+                                            className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                          >
+                                            {getName(
+                                              item.fields,
+                                              firstLocale,
+                                            ) ?? item.sys.id}
+                                          </p>
+                                          <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                            {item.sys.id}
+                                          </p>
+                                        </div>
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </AccordionSection>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
                 </>
               )}
             </div>

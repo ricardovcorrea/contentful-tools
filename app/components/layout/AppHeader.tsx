@@ -1,6 +1,11 @@
-import { EnvPicker } from "~/components/ui/EnvPicker";
+import {
+  HeaderPicker,
+  type HeaderPickerOption,
+} from "~/components/ui/HeaderPicker";
 import { clearContentfulManagementClient } from "~/lib/contentful";
+import { clearCache } from "~/lib/contentful/cache";
 import { useNavigate } from "react-router";
+import { useToast } from "~/lib/toast";
 
 interface CurrentUser {
   firstName: string;
@@ -12,32 +17,51 @@ interface CurrentUser {
 interface Props {
   spaceName: string;
   spaceId: string;
+  spaceOptions: HeaderPickerOption[];
+  onSpaceChange: (id: string) => void;
   environmentId: string;
   environments: { id: string; name: string }[];
   currentUser: CurrentUser;
   isLoading: boolean;
   onEnvChange: (id: string) => void;
+  // OPCO
+  opcoOptions: HeaderPickerOption[];
+  selectedOpco: string;
+  onOpcoChange: (id: string) => void;
+  // Partner
+  partnerOptions: HeaderPickerOption[];
+  selectedPartner: string;
+  onPartnerChange: (id: string) => void;
 }
 
 export function AppHeader({
   spaceName,
   spaceId,
+  spaceOptions,
+  onSpaceChange,
   environmentId,
   environments,
   currentUser,
   isLoading,
   onEnvChange,
+  opcoOptions,
+  selectedOpco,
+  onOpcoChange,
+  partnerOptions,
+  selectedPartner,
+  onPartnerChange,
 }: Props) {
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   return (
-    <header className="bg-gray-50 border-b border-gray-200/70 h-14 sm:h-20 lg:h-28 px-3 sm:px-6 lg:px-8 flex items-center justify-between shrink-0 z-50">
+    <header className="bg-gray-50 border-b border-gray-200/70 h-11 sm:h-16 lg:h-20 px-2 sm:px-4 lg:px-6 flex items-center justify-between shrink-0 z-50">
       {/* Left — Logo + Space + Env */}
-      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          <div className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl bg-blue-500 flex items-center justify-center shadow-sm shadow-blue-500/30">
+      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 lg:w-11 lg:h-11 rounded-xl bg-blue-500 flex items-center justify-center shadow-sm shadow-blue-500/30">
             <svg
-              className="w-4 h-4 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white"
+              className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-white"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -45,73 +69,89 @@ export function AppHeader({
             </svg>
           </div>
           <div className="leading-tight">
-            <div className="text-xs font-semibold text-gray-600 uppercase tracking-widest leading-none hidden sm:block">
+            <div className="text-[9px] font-semibold text-gray-600 uppercase tracking-widest leading-none hidden sm:block">
               Avios
             </div>
-            <div className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 leading-tight">
+            <div className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 leading-tight">
               Content Tools
             </div>
           </div>
         </div>
 
-        <div className="w-px h-10 bg-gray-200 mx-1 sm:mx-2 hidden md:block" />
+        <div className="w-px h-7 bg-gray-200 mx-1 hidden md:block" />
 
-        {/* Space badge — hidden on mobile */}
-        <div className="hidden md:flex items-center gap-2 lg:gap-3 px-3 py-2 rounded-md bg-gray-100 border border-gray-200 min-w-0">
-          <svg
-            className="w-4 h-4 text-gray-600 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 7h18M3 12h18M3 17h18"
-            />
-          </svg>
-          <span className="text-sm text-gray-500 font-medium truncate">
-            {spaceName}
-          </span>
-          <span className="text-xs text-gray-700 font-mono hidden lg:inline shrink-0">
-            ({spaceId})
-          </span>
-        </div>
-
-        {/* EnvPicker — hidden on small mobile */}
-        <div className="hidden sm:block shrink-0">
-          <EnvPicker
+        {/* Context pickers — hidden on small mobile */}
+        <div className="hidden sm:flex items-center gap-1 shrink-0">
+          {/* Space display — read-only, styled like HeaderPicker */}
+          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-orange-500/10 border-orange-500/20 cursor-default">
+            <span className="flex items-center justify-center w-5 h-5 rounded text-[8px] font-extrabold shrink-0 border bg-orange-500/20 border-orange-300/50 text-orange-600">
+              {spaceName
+                .split(/[\s_\-]+/)
+                .slice(0, 2)
+                .map((w: string) => w[0]?.toUpperCase() ?? "")
+                .join("")}
+            </span>
+            <div className="text-left min-w-0">
+              <p className="text-[7px] font-bold uppercase tracking-widest leading-none mb-0.5 text-orange-400">
+                Space
+              </p>
+              <p className="text-[11px] font-semibold truncate leading-tight text-orange-700">
+                {spaceName}
+              </p>
+            </div>
+          </div>
+          <div className="w-px h-6 bg-gray-200" />
+          <HeaderPicker
+            label="Environment"
             value={environmentId}
-            environments={environments}
+            options={environments.map((e) => ({ value: e.id, label: e.name }))}
             onChange={onEnvChange}
             disabled={isLoading}
+            theme="blue"
+          />
+          <div className="w-px h-6 bg-gray-200" />
+          <HeaderPicker
+            label="OPCO"
+            value={selectedOpco}
+            options={opcoOptions}
+            onChange={onOpcoChange}
+            disabled={isLoading}
+            theme="violet"
+          />
+          <div className="w-px h-6 bg-gray-200" />
+          <HeaderPicker
+            label="Partner"
+            value={selectedPartner}
+            options={partnerOptions}
+            onChange={onPartnerChange}
+            disabled={isLoading}
+            theme="emerald"
           />
         </div>
       </div>
 
       {/* Right — User + sign out */}
-      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-        <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           {currentUser.avatarUrl ? (
             <img
               src={currentUser.avatarUrl}
               alt={`${currentUser.firstName} ${currentUser.lastName}`}
-              className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full object-cover ring-1 ring-gray-300"
+              className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full object-cover ring-1 ring-gray-300"
             />
           ) : (
-            <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-              <span className="text-xs sm:text-sm font-bold text-blue-600">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-blue-600">
                 {currentUser.firstName?.[0]}
                 {currentUser.lastName?.[0]}
               </span>
             </div>
           )}
           <div className="leading-tight hidden xl:block">
-            <p className="text-sm font-semibold text-gray-700">
+            <p className="text-[11px] font-semibold text-gray-700">
               {currentUser.firstName} {currentUser.lastName}
             </p>
-            <p className="text-xs text-gray-600">{currentUser.email}</p>
+            <p className="text-[9px] text-gray-600">{currentUser.email}</p>
           </div>
         </div>
 
@@ -120,14 +160,18 @@ export function AppHeader({
             localStorage.removeItem("contentfulManagementToken");
             localStorage.removeItem("contentfulSpaceId");
             localStorage.removeItem("contentfulEnvironment");
+            localStorage.removeItem("selectedOpco");
+            localStorage.removeItem("selectedPartner");
+            clearCache();
             clearContentfulManagementClient();
-            navigate("/login");
+            addToast("All data cleared. Signing you out…", "info");
+            setTimeout(() => navigate("/login"), 1800);
           }}
-          className="rounded-md border border-gray-200 px-2 py-2 sm:px-4 sm:py-2.5 lg:px-5 lg:py-3 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-1.5"
+          className="rounded-md border border-gray-200 px-1.5 py-1.5 sm:px-3 sm:py-2 lg:px-4 lg:py-2 text-xs font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-1"
         >
           {/* Icon always visible */}
           <svg
-            className="w-4 h-4 shrink-0"
+            className="w-3 h-3 shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"

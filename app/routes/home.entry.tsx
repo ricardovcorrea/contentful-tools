@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouteLoaderData } from "react-router";
+import { useToast } from "~/lib/toast";
+import { resolveStringField } from "~/lib/resolve-string-field";
 import { getContentType } from "~/lib/contentful/get-content-type";
 import { getEntry } from "~/lib/contentful/get-entry";
 import { getAsset } from "~/lib/contentful/get-asset";
@@ -50,8 +52,12 @@ function findEntry(
   data: ParentLoaderData,
   firstLocale: string,
 ): SelectedEntry | null {
-  const getName = (fields: Record<string, any>, locale: string) =>
-    fields["internalName"]?.[locale] ?? fields["title"]?.[locale] ?? null;
+  const getName = (fields: Record<string, any>, locale: string) => {
+    const name =
+      resolveStringField(fields["internalName"], locale) ||
+      resolveStringField(fields["title"], locale);
+    return name || null;
+  };
 
   for (const page of data.opcoPages.items) {
     if (page.sys.id === entryId)
@@ -388,10 +394,8 @@ function ReferenceCard({ linkId, locale }: { linkId: string; locale: string }) {
   const contentTypeId = entry?.sys?.contentType?.sys?.id ?? "—";
   const fields = entry?.fields ?? {};
   const name =
-    fields["internalName"]?.[locale] ??
-    fields["title"]?.[locale] ??
-    (Object.values(fields["internalName"] ?? {}) as string[])[0] ??
-    (Object.values(fields["title"] ?? {}) as string[])[0] ??
+    resolveStringField(fields["internalName"], locale) ||
+    resolveStringField(fields["title"], locale) ||
     linkId;
 
   // If this entry wraps an image asset, surface a thumbnail in the header
@@ -544,6 +548,7 @@ function EditableCell({
   localOverrides: Record<string, Record<string, any>>;
   onSaved: (fieldKey: string, locale: string, value: any) => void;
 }) {
+  const { addToast } = useToast();
   const isCellEditing =
     editingCell?.fieldKey === fieldKey && editingCell?.locale === locale;
   const [saving, setSaving] = useState(false);
@@ -568,8 +573,11 @@ function EditableCell({
       await cfEntry.update();
       onSaved(fieldKey, locale, draftValue);
       setEditingCell(null);
+      addToast("Field saved successfully.", "success");
     } catch (err: any) {
-      setSaveError(err?.message ?? "Save failed");
+      const msg = err?.message ?? "Save failed";
+      setSaveError(msg);
+      addToast(msg, "error");
     } finally {
       setSaving(false);
     }

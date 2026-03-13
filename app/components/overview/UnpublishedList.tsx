@@ -1,4 +1,5 @@
 import type { UnpublishedItem } from "~/types/contentful";
+import { resolveStringField } from "~/lib/resolve-string-field";
 
 interface Props {
   items: UnpublishedItem[];
@@ -110,8 +111,8 @@ export function UnpublishedList({
       <div className="flex flex-col gap-2">
         {items.map(({ item, scope, groupLabel, status }) => {
           const name =
-            item.fields?.["internalName"]?.[firstLocale] ??
-            item.fields?.["title"]?.[firstLocale] ??
+            resolveStringField(item.fields?.["internalName"], firstLocale) ||
+            resolveStringField(item.fields?.["title"], firstLocale) ||
             item.sys.id;
           const updatedAt = item.sys.updatedAt
             ? new Date(item.sys.updatedAt)

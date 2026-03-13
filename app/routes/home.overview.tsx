@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouteLoaderData, useNavigate } from "react-router";
+import { useToast } from "~/lib/toast";
 import { getContentType } from "~/lib/contentful/get-content-type";
 import { getAsset } from "~/lib/contentful/get-asset";
-import { getEntry } from "~/lib/contentful/get-entry";
+import { getEntry, invalidateEntry } from "~/lib/contentful/get-entry";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
 import { clearCache } from "~/lib/contentful/cache";
+import { resolveStringField } from "~/lib/resolve-string-field";
 // ── Extracted components (kept here as fallback; extracted versions in components/) ──
 import {
   CellValue as _CellValue,
@@ -458,6 +460,15 @@ function GroupTable({
         cfEntry.fields[fieldId] ??= {};
         cfEntry.fields[fieldId][lc] = value;
         await cfEntry.update();
+        // Mutate the cached list item in-place so the value persists across
+        // re-renders and future reads without needing a full data reload.
+        const cachedItem = group.items.find((i: any) => i.sys.id === entryId);
+        if (cachedItem) {
+          cachedItem.fields[fieldId] ??= {};
+          cachedItem.fields[fieldId][lc] = value;
+        }
+        // Invalidate the per-entry cache so getEntry() callers also get fresh data.
+        invalidateEntry(entryId);
         setLocalEdits((prev) => ({ ...prev, [ck]: value }));
         setEditingCell(null);
         setEditingValue("");
@@ -470,13 +481,15 @@ function GroupTable({
         setSavingCell(null);
       }
     },
-    [],
+    [group.items],
   );
 
-  const getName = (fields: Record<string, any>) =>
-    fields["internalName"]?.[firstLocale] ??
-    fields["title"]?.[firstLocale] ??
-    null;
+  const getName = (fields: Record<string, any>) => {
+    const name =
+      resolveStringField(fields["internalName"], firstLocale) ||
+      resolveStringField(fields["title"], firstLocale);
+    return name || null;
+  };
 
   const isMissingValue = (val: unknown) =>
     val === undefined ||
@@ -484,9 +497,8 @@ function GroupTable({
     val === "" ||
     (Array.isArray(val) && val.length === 0);
 
-  // en-GB (firstLocale) is the base locale — empty/undefined values there are never
-  // flagged as missing. Other locales are only flagged when the base value is present
-  // (i.e. there is something to translate) and the locale value is empty.
+  // en-GB is always the source column (firstLocale is hardcoded to "en-GB").
+  // Other locales are only flagged missing when en-GB has a value but they don't.
   const isFieldMissing = (
     fieldLocaleMap: Record<string, unknown> | undefined,
     lc: string,
@@ -600,9 +612,22 @@ function GroupTable({
                     {localeCodes.map((lc) => (
                       <th
                         key={lc}
-                        className="text-left px-4 py-2.5 text-xs font-semibold text-blue-600 uppercase tracking-wide min-w-48 border-l border-gray-300"
+                        className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide min-w-48 border-l border-gray-300"
                       >
-                        {lc}
+                        <span
+                          className={
+                            lc === firstLocale
+                              ? "text-gray-500"
+                              : "text-blue-600"
+                          }
+                        >
+                          {lc}
+                        </span>
+                        {lc === firstLocale && (
+                          <span className="ml-1.5 text-[9px] font-bold text-gray-400 bg-gray-200 px-1 py-0.5 rounded normal-case tracking-normal">
+                            source
+                          </span>
+                        )}
                       </th>
                     ))}
                   </tr>
@@ -643,34 +668,36 @@ function GroupTable({
                                   <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                                 )}
                                 <div className="min-w-0">
-                                  <p className="text-sm font-medium text-gray-800 leading-snug">
-                                    {name}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium text-gray-800 leading-snug">
+                                      {name}
+                                    </p>
+                                    <a
+                                      href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${item.sys.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="Open in Contentful"
+                                      className="shrink-0 flex items-center justify-center w-5 h-5 rounded border border-gray-300 text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition-colors"
+                                    >
+                                      <svg
+                                        className="w-3 h-3"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                        />
+                                      </svg>
+                                    </a>
+                                  </div>
                                   <p className="text-[10px] font-mono text-gray-600 mt-0.5">
                                     {item.sys.id}
                                   </p>
-                                  <a
-                                    href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${item.sys.id}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="inline-flex items-center gap-1.5 mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-                                  >
-                                    <svg
-                                      className="w-3.5 h-3.5 shrink-0"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      strokeWidth={2}
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                      />
-                                    </svg>
-                                    Open in Contentful
-                                  </a>
                                 </div>
                               </div>
                             </td>
@@ -792,27 +819,23 @@ function GroupTable({
                             return (
                               <td
                                 key={lc}
-                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 ${topBorder} ${isLastField ? "pb-3" : ""} ${
+                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 cursor-pointer transition-colors group/cell ${topBorder} ${isLastField ? "pb-3" : ""} ${
                                   isLocallySaved
-                                    ? "bg-emerald-50/60"
+                                    ? "bg-emerald-50/60 hover:bg-emerald-100/60"
                                     : missing
-                                      ? "bg-red-950/25 cursor-pointer hover:bg-blue-50 transition-colors group/cell"
-                                      : ""
+                                      ? "bg-red-950/25 hover:bg-blue-50"
+                                      : "hover:bg-blue-50/70"
                                 }`}
-                                onClick={
-                                  missing
-                                    ? (e) => {
-                                        e.stopPropagation();
-                                        setEditingCell(ck);
-                                        setEditingValue("");
-                                      }
-                                    : undefined
-                                }
-                                title={
-                                  missing
-                                    ? `Click to add translation for ${fieldId} / ${lc}`
-                                    : undefined
-                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingCell(ck);
+                                  setEditingValue(
+                                    typeof effectiveVal === "string"
+                                      ? effectiveVal
+                                      : "",
+                                  );
+                                }}
+                                title={`Click to edit ${fieldId} / ${lc}`}
                               >
                                 {isLocallySaved ? (
                                   <span className="flex items-center gap-1.5">
@@ -845,11 +868,26 @@ function GroupTable({
                                     </svg>
                                   </span>
                                 ) : (
-                                  <CellValue
-                                    value={effectiveVal}
-                                    firstLocale={firstLocale}
-                                    fieldId={fieldId}
-                                  />
+                                  <span className="flex items-center justify-between gap-1">
+                                    <CellValue
+                                      value={effectiveVal}
+                                      firstLocale={firstLocale}
+                                      fieldId={fieldId}
+                                    />
+                                    <svg
+                                      className="w-3 h-3 shrink-0 text-gray-300 group-hover/cell:text-blue-400 transition-colors"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                      />
+                                    </svg>
+                                  </span>
                                 )}
                               </td>
                             );
@@ -871,6 +909,7 @@ function GroupTable({
 export default function OverviewPage() {
   const { scope, group } = useParams<{ scope: string; group?: string }>();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const parentData = useRouteLoaderData("routes/home") as ParentLoaderData;
 
   if (!parentData) return null;
@@ -890,8 +929,13 @@ export default function OverviewPage() {
     environmentId,
   } = parentData;
 
-  const localeCodes = locales.items.map((l) => l.code);
-  const firstLocale = localeCodes[0] ?? "en";
+  // Rule 1: en-GB is always the source column regardless of OPCO locale config.
+  // Rule 2: remaining columns are the OPCO's configured locales (en-GB excluded).
+  // Rule 3: a cell is "missing" when en-GB has a value but the OPCO locale does not.
+  const EN_GB = "en-GB";
+  const opcoLocaleCodes = locales.items.map((l) => l.code);
+  const localeCodes = [EN_GB, ...opcoLocaleCodes.filter((l) => l !== EN_GB)];
+  const firstLocale = EN_GB;
   const isOpco = scope === "opco";
   const showPartnerInOpco = isOpco && !group;
 
@@ -987,10 +1031,12 @@ export default function OverviewPage() {
   // (showPartnerInOpco already computed above with the groups)
 
   const exportCsv = useCallback(() => {
-    const getName = (fields: Record<string, any>) =>
-      fields["internalName"]?.[firstLocale] ??
-      fields["title"]?.[firstLocale] ??
-      null;
+    const getName = (fields: Record<string, any>) => {
+      const name =
+        resolveStringField(fields["internalName"], firstLocale) ||
+        resolveStringField(fields["title"], firstLocale);
+      return name || null;
+    };
 
     const escCsv = (v: string) => {
       const s = v.replace(/"/g, '""');
@@ -1098,8 +1144,8 @@ export default function OverviewPage() {
     async (item: any) => {
       const entryId = item.sys.id;
       const name =
-        item.fields?.["internalName"]?.[firstLocale] ??
-        item.fields?.["title"]?.[firstLocale] ??
+        resolveStringField(item.fields?.["internalName"], firstLocale) ||
+        resolveStringField(item.fields?.["title"], firstLocale) ||
         entryId;
       setEntryDiffModal({
         entryId,
@@ -1175,40 +1221,78 @@ export default function OverviewPage() {
     [firstLocale],
   );
 
-  const handlePublishEntry = useCallback(async (entryId: string) => {
-    setPublishingEntries((prev) => ({ ...prev, [entryId]: "loading" }));
-    try {
-      const environment = await getContentfulManagementEnvironment();
-      const entry = await environment.getEntry(entryId);
-      await entry.publish();
-      setPublishingEntries((prev) => ({ ...prev, [entryId]: "done" }));
-    } catch (err) {
-      console.error("Failed to publish entry", entryId, err);
-      setPublishingEntries((prev) => ({ ...prev, [entryId]: "error" }));
-    }
-  }, []);
+  // Finds a raw list item by entryId across all groups so we can mutate its sys in-place.
+  const findCachedItem = useCallback(
+    (entryId: string) =>
+      [...opcoGroups, ...partnerGroups]
+        .flatMap((g) => g.items)
+        .find((i: any) => i.sys.id === entryId),
+    [opcoGroups, partnerGroups],
+  );
 
-  const handlePublishSelected = useCallback(async (ids: string[]) => {
-    setPublishingEntries((prev) => {
-      const next = { ...prev };
-      for (const id of ids) next[id] = "loading";
-      return next;
-    });
-    setSelectedUnpublished(new Set());
-    await Promise.all(
-      ids.map(async (entryId) => {
-        try {
-          const environment = await getContentfulManagementEnvironment();
-          const entry = await environment.getEntry(entryId);
-          await entry.publish();
-          setPublishingEntries((prev) => ({ ...prev, [entryId]: "done" }));
-        } catch (err) {
-          console.error("Failed to publish entry", entryId, err);
-          setPublishingEntries((prev) => ({ ...prev, [entryId]: "error" }));
+  const handlePublishEntry = useCallback(
+    async (entryId: string) => {
+      setPublishingEntries((prev) => ({ ...prev, [entryId]: "loading" }));
+      try {
+        const environment = await getContentfulManagementEnvironment();
+        const entry = await environment.getEntry(entryId);
+        const published = await entry.publish();
+        // Mutate cached item sys so filteredUnpublishedItems stops including it.
+        const cached = findCachedItem(entryId);
+        if (cached && published?.sys) {
+          Object.assign(cached.sys, published.sys);
         }
-      }),
-    );
-  }, []);
+        setPublishingEntries((prev) => ({ ...prev, [entryId]: "done" }));
+        addToast("Entry published successfully", "success");
+      } catch (err) {
+        console.error("Failed to publish entry", entryId, err);
+        setPublishingEntries((prev) => ({ ...prev, [entryId]: "error" }));
+      }
+    },
+    [findCachedItem, addToast],
+  );
+
+  const handlePublishSelected = useCallback(
+    async (ids: string[]) => {
+      setPublishingEntries((prev) => {
+        const next = { ...prev };
+        for (const id of ids) next[id] = "loading";
+        return next;
+      });
+      setSelectedUnpublished(new Set());
+      let successCount = 0;
+      let errorCount = 0;
+      await Promise.all(
+        ids.map(async (entryId) => {
+          try {
+            const environment = await getContentfulManagementEnvironment();
+            const entry = await environment.getEntry(entryId);
+            const published = await entry.publish();
+            // Mutate cached item sys so filteredUnpublishedItems stops including it.
+            const cached = findCachedItem(entryId);
+            if (cached && published?.sys) {
+              Object.assign(cached.sys, published.sys);
+            }
+            setPublishingEntries((prev) => ({ ...prev, [entryId]: "done" }));
+            successCount++;
+          } catch (err) {
+            console.error("Failed to publish entry", entryId, err);
+            setPublishingEntries((prev) => ({ ...prev, [entryId]: "error" }));
+            errorCount++;
+          }
+        }),
+      );
+      if (successCount > 0 && errorCount === 0) {
+        addToast(
+          `${successCount} entr${successCount === 1 ? "y" : "ies"} published successfully`,
+          "success",
+        );
+      } else if (successCount > 0) {
+        addToast(`${successCount} published, ${errorCount} failed`, "info");
+      }
+    },
+    [findCachedItem, addToast],
+  );
 
   const handleApplyChanges = useCallback(async () => {
     if (acceptedKeys.size === 0) return;
@@ -1266,6 +1350,8 @@ export default function OverviewPage() {
       );
 
     // Run all updates in parallel
+    let applySuccess = 0;
+    let applyError = 0;
     await Promise.all(
       entries.map(async (entry) => {
         setEntryStatus(entry.entryId, "loading");
@@ -1282,6 +1368,7 @@ export default function OverviewPage() {
           const updated = await cfEntry.update();
           // ───────────────────────────────────────────────────────────────
           setEntryStatus(entry.entryId, "success");
+          applySuccess++;
         } catch (err: any) {
           console.error(`[Apply Changes] Failed for ${entry.entryId}:`, err);
           setEntryStatus(
@@ -1289,13 +1376,23 @@ export default function OverviewPage() {
             "error",
             err?.message ?? "Unknown error",
           );
+          applyError++;
         }
       }),
     );
 
+    if (applySuccess > 0 && applyError === 0) {
+      addToast(
+        `${applySuccess} entr${applySuccess === 1 ? "y" : "ies"} imported successfully`,
+        "success",
+      );
+    } else if (applySuccess > 0) {
+      addToast(`${applySuccess} imported, ${applyError} failed`, "info");
+    }
+
     // Invalidate cache so next load fetches fresh data from Contentful
     clearCache();
-  }, [acceptedKeys, diffRows]);
+  }, [acceptedKeys, diffRows, addToast]);
 
   const handleImportCsv = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1502,13 +1599,13 @@ export default function OverviewPage() {
             className={`w-2 h-2 rounded-full shrink-0 ${isOpco ? "bg-violet-500" : "bg-emerald-500"}`}
           />
           <div>
-            <h2 className="text-base font-bold text-gray-900">{pageTitle}</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h2 className="text-lg font-bold text-gray-900">{pageTitle}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
               {scopeLabel} · {totalEntries} entries · {localeCodes.length}{" "}
               locales · only localizable fields shown
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">
+          <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
             {activeTab === "translations" && (
               <>
                 <button
@@ -1607,7 +1704,7 @@ export default function OverviewPage() {
         <div className="flex items-end gap-0 mt-4 -mb-px">
           <button
             onClick={() => setActiveTab("translations")}
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               activeTab === "translations"
                 ? "border-blue-500 text-blue-600"
                 : "border-transparent text-gray-500 hover:text-gray-700"
@@ -1617,7 +1714,7 @@ export default function OverviewPage() {
           </button>
           <button
             onClick={() => setActiveTab("unpublished")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               activeTab === "unpublished"
                 ? "border-amber-500 text-amber-600"
                 : "border-transparent text-gray-500 hover:text-gray-700"
@@ -1648,10 +1745,10 @@ export default function OverviewPage() {
                 className="w-full flex items-center gap-2 mb-3 px-1 py-1 -mx-1 rounded-lg hover:bg-gray-200/50 transition-colors group"
               >
                 <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
                   OPCO — {opcoId}
                 </span>
-                <span className="text-[11px] text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
+                <span className="text-xs text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
                   {opcoGroups.reduce((a, g) => a + g.items.length, 0)}
                 </span>
                 <svg
@@ -1702,10 +1799,10 @@ export default function OverviewPage() {
                   className="w-full flex items-center gap-2 mt-4 mb-3 px-1 py-1 -mx-1 rounded-lg hover:bg-gray-200/50 transition-colors group"
                 >
                   <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
+                  <span className="text-sm font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
                     Partner — {partnerId}
                   </span>
-                  <span className="text-[11px] text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
+                  <span className="text-xs text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
                     {partnerGroups.reduce((a, g) => a + g.items.length, 0)}
                   </span>
                   <svg
@@ -1841,8 +1938,14 @@ export default function OverviewPage() {
                       {filteredUnpublishedItems.map(
                         ({ item, scope, groupLabel, status }) => {
                           const name =
-                            item.fields?.["internalName"]?.[firstLocale] ??
-                            item.fields?.["title"]?.[firstLocale] ??
+                            resolveStringField(
+                              item.fields?.["internalName"],
+                              firstLocale,
+                            ) ||
+                            resolveStringField(
+                              item.fields?.["title"],
+                              firstLocale,
+                            ) ||
                             item.sys.id;
                           const updatedAt = item.sys.updatedAt
                             ? new Date(item.sys.updatedAt)

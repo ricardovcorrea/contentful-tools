@@ -5,6 +5,11 @@ import { useState, useEffect } from "react";
 import { AppHeader } from "~/components/layout/AppHeader";
 import { AppSidebar } from "~/components/layout/AppSidebar";
 import { AppFooter } from "~/components/layout/AppFooter";
+import { ToastProvider } from "~/lib/toast";
+import {
+  dispatchLoadStep,
+  dispatchLoadComplete,
+} from "~/components/loading-screen";
 import {
   Outlet,
   useNavigate,
@@ -34,6 +39,8 @@ import {
 import { getLocales } from "~/lib/contentful/get-locales";
 import { getCurrentUser } from "~/lib/contentful/get-current-user";
 import { getContentType } from "~/lib/contentful/get-content-type";
+import { getScheduledActions } from "~/lib/contentful/get-scheduled-actions";
+import { resolveStringField } from "~/lib/resolve-string-field";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -55,18 +62,36 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     return redirect("/login");
   }
 
+  // Remove any corrupted selection values that might have been stored as
+  // "[object Object]" from a previous bad run.
+  for (const key of ["selectedOpco", "selectedPartner"]) {
+    const v = localStorage.getItem(key);
+    if (v && (v.includes("[object") || v.includes("{"))) {
+      localStorage.removeItem(key);
+    }
+  }
+
   const url = new URL(request.url);
 
   const client = getContentfulManagementClient();
 
-  let opcos: any, locales: any, currentUser: any, spaceObj: any;
+  let opcos: any,
+    locales: any,
+    currentUser: any,
+    spaceObj: any,
+    spacesCollection: any;
+  dispatchLoadStep(0);
   try {
-    [opcos, locales, currentUser, spaceObj] = await Promise.all([
-      getOpcos(),
-      getLocales(),
-      getCurrentUser(),
-      withCache(`space:${spaceId}`, () => client.getSpace(spaceId)),
-    ]);
+    [opcos, locales, currentUser, spaceObj, spacesCollection] =
+      await Promise.all([
+        getOpcos(),
+        getLocales(),
+        getCurrentUser(),
+        withCache(`space:${spaceId}`, () => client.getSpace(spaceId)),
+        withCache(`spaces`, () => client.getSpaces()).catch(() => ({
+          items: [],
+        })),
+      ]);
   } catch (e: any) {
     const status = e?.sys?.status ?? e?.status ?? e?.response?.status;
     const msg = e?.message ?? e?.sys?.id ?? "Unknown error";
@@ -79,32 +104,26 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   }
 
   const spaceName = spaceObj.name;
-  let envObj: any, environmentsList: any;
-  try {
-    [envObj, environmentsList] = await Promise.all([
-      withCache(`env:${spaceId}:${environment}`, () =>
-        spaceObj.getEnvironment(environment),
-      ),
-      withCache(`environments:${spaceId}`, () => spaceObj.getEnvironments()),
-    ]);
-  } catch (e: any) {
-    const msg = e?.message ?? String(e);
-    throw new Error(`Failed to load environment "${environment}": ${msg}`);
-  }
-  const environmentName = envObj.name;
-  const environments = environmentsList.items.map((e: any) => ({
-    id: e.sys.id,
-    name: e.name,
-  }));
+
+  // Compute opcoId early (needs opcos + locales from step 0) so step 1 can
+  // call getOpcoPartners(opcoId) in parallel with envObj fetch.
+
+  // Sort locales so en-GB is always first; preserve API order for the rest.
+  locales.items.sort((a: any, b: any) => {
+    if (a.code === "en-GB") return -1;
+    if (b.code === "en-GB") return 1;
+    return 0;
+  });
 
   const firstLocale = locales.items[0]?.code ?? "en";
 
   const getOpcoFieldId = (opco: any) =>
-    opco.fields["id"]?.[firstLocale] ?? opco.fields["id"] ?? "";
+    resolveStringField(opco.fields["id"], firstLocale);
   const getOpcoName = (opco: any) =>
-    opco.fields["internalName"]?.[firstLocale] ??
-    opco.fields["title"]?.[firstLocale] ??
-    "";
+    resolveStringField(
+      opco.fields["internalName"] ?? opco.fields["title"],
+      firstLocale,
+    );
 
   const baOpco = opcos.items.find((o: any) =>
     getOpcoName(o).toLowerCase().includes("british airways"),
@@ -113,38 +132,99 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     ? getOpcoFieldId(baOpco)
     : (getOpcoFieldId(opcos.items[0]) ?? "");
 
+  /** Return null for any value that is clearly not a plain string ID. */
+  const safeStoredId = (raw: string | null): string | null => {
+    if (!raw || raw.includes("[object") || raw.includes("{")) return null;
+    return raw;
+  };
+
   const opcoId =
-    url.searchParams.get("opco") ??
-    localStorage.getItem("selectedOpco") ??
+    safeStoredId(url.searchParams.get("opco")) ??
+    safeStoredId(localStorage.getItem("selectedOpco")) ??
     defaultOpcoId;
 
-  let opcoPartners: any;
-  try {
-    opcoPartners = await getOpcoPartners(opcoId);
-  } catch (e: any) {
-    throw new Error(
-      `Failed to load partners for OPCO "${opcoId}": ${e?.message ?? e}`,
-    );
-  }
+  // Narrow locales to those configured on the selected OPCO entry.
+  // The "locales" field on the opco content type is expected to be an array
+  // of locale-code strings (e.g. ["en-GB", "ar-AE"]).  If the field is
+  // absent or returns an empty array we fall back to all environment locales.
+  const selectedOpcoEntry = opcos.items.find(
+    (o: any) => getOpcoFieldId(o) === opcoId,
+  );
+  const rawOpcoLocales: unknown =
+    selectedOpcoEntry?.fields?.["locales"]?.[firstLocale];
+  // Keep a snapshot of all environment locales before narrowing to the OPCO set.
+  const allLocalesItems: any[] = locales.items;
+  const filteredLocaleItems =
+    Array.isArray(rawOpcoLocales) && rawOpcoLocales.length > 0
+      ? allLocalesItems.filter((l: any) =>
+          (rawOpcoLocales as string[]).includes(l.code),
+        )
+      : allLocalesItems;
+  // Build plain objects so child routes always get plain serialisable data.
+  const allLocales = { items: allLocalesItems };
+  const filteredLocales = { items: filteredLocaleItems };
 
-  const firstPartnerId =
-    opcoPartners.items[0]?.fields["id"]?.[firstLocale] ??
-    opcoPartners.items[0]?.fields["id"] ??
-    "";
+  // Step 1: load envObj + environments + opcoPartners ALL in parallel —
+  // none depend on each other; opcoId is already known from step 0.
+  let envObj: any, environmentsList: any, opcoPartners: any;
+  dispatchLoadStep(1);
+  try {
+    [envObj, environmentsList, opcoPartners] = await Promise.all([
+      withCache(`env:${spaceId}:${environment}`, () =>
+        spaceObj.getEnvironment(environment),
+      ),
+      withCache(`environments:${spaceId}`, () => spaceObj.getEnvironments()),
+      getOpcoPartners(opcoId),
+    ]);
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    throw new Error(`Failed to load environment or partners: ${msg}`);
+  }
+  const environmentName = envObj.name;
+  const environments = environmentsList.items.map((e: any) => ({
+    id: e.sys.id,
+    name: e.name,
+  }));
+
+  // Fire env-level stats + scheduled actions in the background immediately —
+  // they'll almost certainly finish before the tree-building steps do.
+  const scheduledActionsPromise = withCache(
+    `scheduled-actions:${spaceId}:${environment}`,
+    () => getScheduledActions(spaceId!, environment!),
+  ).catch(() => []);
+
+  const envStatsPromise = Promise.all([
+    withCache(`env-entries-total:${spaceId}:${environment}`, () =>
+      envObj.getEntries({ limit: 0 }),
+    ).catch(() => ({ total: null })),
+    withCache(`env-ct-total:${spaceId}:${environment}`, () =>
+      envObj.getContentTypes({ limit: 0 }),
+    ).catch(() => ({ total: null })),
+    withCache(`env-assets-total:${spaceId}:${environment}`, () =>
+      envObj.getAssets({ limit: 0 }),
+    ).catch(() => ({ total: null })),
+  ]);
+
+  const firstPartnerId = resolveStringField(
+    opcoPartners.items[0]?.fields["id"],
+    firstLocale,
+  );
   const partnerId =
-    url.searchParams.get("partner") ??
-    localStorage.getItem("selectedPartner") ??
+    safeStoredId(url.searchParams.get("partner")) ??
+    safeStoredId(localStorage.getItem("selectedPartner")) ??
     firstPartnerId;
 
   // Persist resolved values
   localStorage.setItem("selectedOpco", opcoId);
   localStorage.setItem("selectedPartner", partnerId);
 
+  // Step 2: load all content entries in parallel
   let opcoPages: any,
     opcoMessages: any,
     partnerPages: any,
     partnerMessages: any,
     partnerEmails: any;
+  dispatchLoadStep(2);
   try {
     [opcoPages, opcoMessages, partnerPages, partnerMessages, partnerEmails] =
       await Promise.all([
@@ -182,19 +262,24 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const opcoPageIds = opcoPages.items.map((i: any) => i.sys.id as string);
   const partnerPageIds = partnerPages.items.map((i: any) => i.sys.id as string);
 
-  const [opcoRefGroups, partnerRefGroups] = await Promise.all([
-    opcoPageIds.length > 0
-      ? getEntryTree(opcoPageIds, opcoRootCTIds, `opco-refs:${opcoId}`)
-      : Promise.resolve([] as RefGroup[]),
-    partnerPageIds.length > 0
-      ? getEntryTree(
-          partnerPageIds,
-          partnerRootCTIds,
-          `partner-refs:${opcoId}:${partnerId}`,
-        )
-      : Promise.resolve([] as RefGroup[]),
-  ]);
+  // Step 3: build OPCO + partner content trees in parallel (was sequential)
+  dispatchLoadStep(3);
+  const [opcoRefGroups, partnerRefGroups]: [RefGroup[], RefGroup[]] =
+    await Promise.all([
+      opcoPageIds.length > 0
+        ? getEntryTree(opcoPageIds, opcoRootCTIds, `opco-refs:${opcoId}`)
+        : Promise.resolve([]),
+      partnerPageIds.length > 0
+        ? getEntryTree(
+            partnerPageIds,
+            partnerRootCTIds,
+            `partner-refs:${opcoId}:${partnerId}`,
+          )
+        : Promise.resolve([]),
+    ]);
 
+  // Step 4: resolve localizable content types
+  dispatchLoadStep(4);
   const uniqueCtIds = [
     ...new Set([
       ...[
@@ -215,14 +300,38 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       getContentType(id)
         .then((ct) => ({
           id,
-          hasLocalizable: ct.fields.some((f) => f.localized),
+          localizableFields: ct.fields
+            .filter((f: any) => f.localized)
+            .map((f: any) => f.id as string),
         }))
-        .catch(() => ({ id, hasLocalizable: false })),
+        .catch(() => ({ id, localizableFields: [] as string[] })),
     ),
   );
   const localizableContentTypes: string[] = ctResults
-    .filter((r) => r.hasLocalizable)
+    .filter((r) => r.localizableFields.length > 0)
     .map((r) => r.id);
+  const localizableFieldsMap: Record<string, string[]> = Object.fromEntries(
+    ctResults.map((r) => [r.id, r.localizableFields]),
+  );
+
+  // Await env stats — fired in background during steps 2-4, almost certainly done
+  const [envEntriesResult, envContentTypesResult, envAssetsResult] =
+    await envStatsPromise;
+
+  const envStats = {
+    totalEntries: (envEntriesResult as { total: number | null }).total,
+    totalContentTypes: (envContentTypesResult as { total: number | null })
+      .total,
+    totalAssets: (envAssetsResult as { total: number | null }).total,
+  };
+
+  const scheduledActions = await scheduledActionsPromise;
+
+  dispatchLoadStep(5);
+
+  // Mark all steps done, wait 500ms so the user sees the completed state.
+  dispatchLoadComplete();
+  await new Promise((r) => setTimeout(r, 1000));
 
   return {
     opcos,
@@ -236,14 +345,22 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     partnerEmails,
     opcoRefGroups,
     partnerRefGroups,
-    locales,
+    locales: filteredLocales,
+    allLocales,
     currentUser,
     spaceId,
     spaceName,
+    spaces: (spacesCollection?.items ?? []).map((s: any) => ({
+      id: s.sys.id,
+      name: s.name,
+    })) as { id: string; name: string }[],
     environmentId: environment,
     environmentName,
     environments,
+    envStats,
+    scheduledActions,
     localizableContentTypes,
+    localizableFieldsMap,
     cacheLastUpdated: getCacheLastUpdated(),
   };
 }
@@ -266,6 +383,7 @@ export function ErrorBoundary() {
     localStorage.removeItem("contentfulEnvironment");
     localStorage.removeItem("selectedOpco");
     localStorage.removeItem("selectedPartner");
+    clearCache();
     clearContentfulManagementClient();
   }, []);
 
@@ -332,6 +450,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     currentUser,
     spaceId,
     spaceName,
+    spaces,
     environmentId,
     environments,
     localizableContentTypes,
@@ -367,11 +486,11 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
 
   const opcoEntrySysId = opcos.items.find(
     (o: any) =>
-      (o.fields["id"]?.[firstLocale] ?? o.fields["id"]) === selectedOpco,
+      resolveStringField(o.fields["id"], firstLocale) === selectedOpco,
   )?.sys.id;
   const partnerEntrySysId = opcoPartners.items.find(
     (p: any) =>
-      (p.fields["id"]?.[firstLocale] ?? p.fields["id"]) === selectedPartner,
+      resolveStringField(p.fields["id"], firstLocale) === selectedPartner,
   )?.sys.id;
 
   const allOpcoEntryIds = new Set([
@@ -397,6 +516,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
 
   const [opcoExpanded, setOpcoExpanded] = useState(shouldExpandOpco);
   const [partnerExpanded, setPartnerExpanded] = useState(shouldExpandPartner);
+  const [sidebarResetKey, setSidebarResetKey] = useState(0);
 
   useEffect(() => {
     if (shouldExpandOpco) setOpcoExpanded(true);
@@ -431,17 +551,22 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const handleOpcoChange = (id: string) => {
     localStorage.setItem("selectedOpco", id);
     localStorage.removeItem("selectedPartner");
+    setOpcoExpanded(false);
+    setPartnerExpanded(false);
+    setSidebarResetKey((k) => k + 1);
     const params = new URLSearchParams(searchParams);
     params.set("opco", id);
     params.delete("partner");
-    navigate(`/overview/opco?${params.toString()}`);
+    navigate(`/environment?${params.toString()}`);
   };
 
   const handlePartnerChange = (id: string) => {
     localStorage.setItem("selectedPartner", id);
+    setPartnerExpanded(false);
+    setSidebarResetKey((k) => k + 1);
     const params = new URLSearchParams(searchParams);
     params.set("partner", id);
-    navigate(`/overview/opco?${params.toString()}`);
+    navigate(`/environment?${params.toString()}`);
   };
 
   const handleEnvChange = (id: string) => {
@@ -450,121 +575,163 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     navigate(0);
   };
 
+  const handleSpaceChange = (id: string) => {
+    if (id === spaceId) return;
+    localStorage.setItem("contentfulSpaceId", id);
+    localStorage.removeItem("contentfulEnvironment");
+    localStorage.removeItem("selectedOpco");
+    localStorage.removeItem("selectedPartner");
+    clearCache();
+    clearContentfulManagementClient();
+    navigate("/login");
+  };
+
   const goToEntry = (sysId: string) => {
     navigate(`/entry/${sysId}`);
   };
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
-      <AppHeader
-        spaceName={spaceName}
-        spaceId={spaceId}
-        environmentId={environmentId}
-        environments={environments}
-        currentUser={currentUser}
-        isLoading={isLoading}
-        onEnvChange={handleEnvChange}
-      />
-
-      {/* Top progress bar */}
-      {isLoading && (
-        <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
-          <div
-            className="h-full w-1/2 bg-blue-500"
-            style={{ animation: "progress-slide 1.4s ease-in-out infinite" }}
-          />
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar
+    <ToastProvider>
+      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+        <AppHeader
+          spaceName={spaceName}
+          spaceId={spaceId}
+          spaceOptions={spaces.map((s) => ({ value: s.id, label: s.name }))}
+          onSpaceChange={handleSpaceChange}
+          environmentId={environmentId}
+          environments={environments}
+          currentUser={currentUser}
           isLoading={isLoading}
-          firstLocale={firstLocale}
-          opcos={opcos}
+          onEnvChange={handleEnvChange}
+          opcoOptions={opcos.items.map((opco: any) => ({
+            value:
+              resolveStringField(opco.fields["id"], firstLocale) || opco.sys.id,
+            label: (resolveStringField(
+              opco.fields["internalName"],
+              firstLocale,
+            ) ||
+              resolveStringField(opco.fields["title"], firstLocale) ||
+              resolveStringField(opco.fields["id"], firstLocale) ||
+              opco.sys.id) as string,
+          }))}
           selectedOpco={selectedOpco}
-          opcoEntrySysId={opcoEntrySysId}
-          opcoPages={opcoPages}
-          opcoMessages={opcoMessages}
-          opcoRefGroups={opcoRefGroups}
-          opcoHasLocalizable={opcoHasLocalizable}
-          opcoExpanded={opcoExpanded}
-          onOpcoToggle={() => setOpcoExpanded((p) => !p)}
           onOpcoChange={handleOpcoChange}
-          opcoPartners={opcoPartners}
+          partnerOptions={opcoPartners.items.map((partner: any) => ({
+            value:
+              resolveStringField(partner.fields["id"], firstLocale) ||
+              partner.sys.id,
+            label: (resolveStringField(
+              partner.fields["internalName"],
+              firstLocale,
+            ) ||
+              resolveStringField(partner.fields["title"], firstLocale) ||
+              resolveStringField(partner.fields["id"], firstLocale) ||
+              partner.sys.id) as string,
+          }))}
           selectedPartner={selectedPartner}
-          partnerEntrySysId={partnerEntrySysId}
-          partnerPages={partnerPages}
-          partnerMessages={partnerMessages}
-          partnerEmails={partnerEmails}
-          partnerRefGroups={partnerRefGroups}
-          partnerHasLocalizable={partnerHasLocalizable}
-          partnerExpanded={partnerExpanded}
-          onPartnerToggle={() => setPartnerExpanded((p) => !p)}
           onPartnerChange={handlePartnerChange}
-          entryId={entryId}
-          pathname={pathname}
-          onNavigate={navigate}
-          onGoToEntry={goToEntry}
-          isLocalizable={isLocalizable}
         />
 
-        {/* Main content */}
-        {isLoading ? (
-          <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+        {/* Top progress bar */}
+        {isLoading && (
+          <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
             <div
-              style={{
-                animation: "skeleton-shimmer 1.4s ease-in-out infinite",
-              }}
-            >
-              <div className="mb-6">
-                <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
-                <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
-                <div className="h-3 w-40 bg-gray-200 rounded" />
-              </div>
-              <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
-                {[82, 76, 48, 52].map((w, i) => (
-                  <div
-                    key={i}
-                    className="h-4 bg-gray-200 rounded"
-                    style={{ width: w }}
-                  />
-                ))}
-              </div>
-              <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
-                <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
-                  <div className="h-3 w-24 bg-gray-300 rounded" />
-                  <div className="h-3 w-32 bg-gray-300 rounded" />
-                </div>
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
-                  >
-                    <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
-                    <div
-                      className="h-3 bg-gray-200 rounded"
-                      style={{ width: `${40 + ((i * 23) % 45)}%` }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </main>
-        ) : (
-          <Outlet />
+              className="h-full w-1/2 bg-blue-500"
+              style={{ animation: "progress-slide 1.4s ease-in-out infinite" }}
+            />
+          </div>
         )}
-      </div>
 
-      <AppFooter
-        maskedToken={maskedToken}
-        cacheLastUpdated={cacheLastUpdated}
-        isLoading={isLoading}
-        onRefreshCache={() => {
-          clearCache();
-          navigate(0);
-        }}
-        cacheTtlMs={CACHE_TTL_MS}
-      />
-    </div>
+        <div className="flex flex-1 overflow-hidden">
+          <AppSidebar
+            isLoading={isLoading}
+            firstLocale={firstLocale}
+            locales={locales}
+            opcos={opcos}
+            selectedOpco={selectedOpco}
+            opcoEntrySysId={opcoEntrySysId}
+            opcoPages={opcoPages}
+            opcoMessages={opcoMessages}
+            opcoRefGroups={opcoRefGroups}
+            opcoHasLocalizable={opcoHasLocalizable}
+            opcoExpanded={opcoExpanded}
+            onOpcoToggle={() => setOpcoExpanded((p) => !p)}
+            opcoPartners={opcoPartners}
+            selectedPartner={selectedPartner}
+            partnerEntrySysId={partnerEntrySysId}
+            partnerPages={partnerPages}
+            partnerMessages={partnerMessages}
+            partnerEmails={partnerEmails}
+            partnerRefGroups={partnerRefGroups}
+            partnerHasLocalizable={partnerHasLocalizable}
+            partnerExpanded={partnerExpanded}
+            onPartnerToggle={() => setPartnerExpanded((p) => !p)}
+            entryId={entryId}
+            pathname={pathname}
+            onNavigate={navigate}
+            onGoToEntry={goToEntry}
+            isLocalizable={isLocalizable}
+            resetKey={sidebarResetKey}
+          />
+
+          {/* Main content */}
+          {isLoading ? (
+            <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+              <div
+                style={{
+                  animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                }}
+              >
+                <div className="mb-6">
+                  <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
+                  <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
+                  <div className="h-3 w-40 bg-gray-200 rounded" />
+                </div>
+                <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
+                  {[82, 76, 48, 52].map((w, i) => (
+                    <div
+                      key={i}
+                      className="h-4 bg-gray-200 rounded"
+                      style={{ width: w }}
+                    />
+                  ))}
+                </div>
+                <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
+                  <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
+                    <div className="h-3 w-24 bg-gray-300 rounded" />
+                    <div className="h-3 w-32 bg-gray-300 rounded" />
+                  </div>
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
+                    >
+                      <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
+                      <div
+                        className="h-3 bg-gray-200 rounded"
+                        style={{ width: `${40 + ((i * 23) % 45)}%` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </main>
+          ) : (
+            <Outlet />
+          )}
+        </div>
+
+        <AppFooter
+          maskedToken={maskedToken}
+          cacheLastUpdated={cacheLastUpdated}
+          isLoading={isLoading}
+          onRefreshCache={() => {
+            clearCache();
+            navigate(0);
+          }}
+          cacheTtlMs={CACHE_TTL_MS}
+        />
+      </div>
+    </ToastProvider>
   );
 }

@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { getContentType } from "~/lib/contentful/get-content-type";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
+import { invalidateEntry } from "~/lib/contentful/get-entry";
 import { CellValue } from "~/components/overview/CellValue";
 import type { EntryGroup } from "~/types/contentful";
+import { resolveStringField } from "~/lib/resolve-string-field";
+import { useToast } from "~/lib/toast";
 
 // ── Hook ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +76,8 @@ export function GroupTable({
   const { fields: localizableFields, loading } =
     useLocalizableFields(contentTypeId);
 
+  const { addToast } = useToast();
+
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -96,9 +101,19 @@ export function GroupTable({
         cfEntry.fields[fieldId] ??= {};
         cfEntry.fields[fieldId][lc] = value;
         await cfEntry.update();
+        // Mutate the cached list item in-place so the value persists across
+        // re-renders and future reads without needing a full data reload.
+        const cachedItem = group.items.find((i: any) => i.sys.id === entryId);
+        if (cachedItem) {
+          cachedItem.fields[fieldId] ??= {};
+          cachedItem.fields[fieldId][lc] = value;
+        }
+        // Invalidate the per-entry cache so getEntry() callers also get fresh data.
+        invalidateEntry(entryId);
         setLocalEdits((prev) => ({ ...prev, [ck]: value }));
         setEditingCell(null);
         setEditingValue("");
+        addToast("Field saved successfully", "success");
       } catch (err: any) {
         setSaveCellError((prev) => ({
           ...prev,
@@ -108,13 +123,15 @@ export function GroupTable({
         setSavingCell(null);
       }
     },
-    [],
+    [group.items],
   );
 
-  const getName = (fields: Record<string, any>) =>
-    fields["internalName"]?.[firstLocale] ??
-    fields["title"]?.[firstLocale] ??
-    null;
+  const getName = (fields: Record<string, any>) => {
+    const name =
+      resolveStringField(fields["internalName"], firstLocale) ||
+      resolveStringField(fields["title"], firstLocale);
+    return name || null;
+  };
 
   const isMissingValue = (val: unknown) =>
     val === undefined ||
@@ -421,27 +438,23 @@ export function GroupTable({
                             return (
                               <td
                                 key={lc}
-                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 ${topBorder} ${isLastField ? "pb-3" : ""} ${
+                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 cursor-pointer transition-colors group/cell ${topBorder} ${isLastField ? "pb-3" : ""} ${
                                   isLocallySaved
-                                    ? "bg-emerald-50/60"
+                                    ? "bg-emerald-50/60 hover:bg-emerald-100/60"
                                     : missing
-                                      ? "bg-red-950/25 cursor-pointer hover:bg-blue-50 transition-colors group/cell"
-                                      : ""
+                                      ? "bg-red-950/25 hover:bg-blue-50"
+                                      : "hover:bg-blue-50/70"
                                 }`}
-                                onClick={
-                                  missing
-                                    ? (e) => {
-                                        e.stopPropagation();
-                                        setEditingCell(ck);
-                                        setEditingValue("");
-                                      }
-                                    : undefined
-                                }
-                                title={
-                                  missing
-                                    ? `Click to add translation for ${fieldId} / ${lc}`
-                                    : undefined
-                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingCell(ck);
+                                  setEditingValue(
+                                    typeof effectiveVal === "string"
+                                      ? effectiveVal
+                                      : "",
+                                  );
+                                }}
+                                title={`Click to edit ${fieldId} / ${lc}`}
                               >
                                 {isLocallySaved ? (
                                   <span className="flex items-center gap-1.5">
@@ -474,11 +487,26 @@ export function GroupTable({
                                     </svg>
                                   </span>
                                 ) : (
-                                  <CellValue
-                                    value={effectiveVal}
-                                    firstLocale={firstLocale}
-                                    fieldId={fieldId}
-                                  />
+                                  <span className="flex items-center justify-between gap-1">
+                                    <CellValue
+                                      value={effectiveVal}
+                                      firstLocale={firstLocale}
+                                      fieldId={fieldId}
+                                    />
+                                    <svg
+                                      className="w-3 h-3 shrink-0 text-gray-300 group-hover/cell:text-blue-400 transition-colors"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                      />
+                                    </svg>
+                                  </span>
                                 )}
                               </td>
                             );
