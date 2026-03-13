@@ -1,6 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  createContext,
+  useContext,
+} from "react";
 import { Editor, Frame, useNode, useEditor } from "@craftjs/core";
 import { getEntry } from "~/lib/contentful/get-entry";
+import { getContentfulManagementEnvironment } from "~/lib/contentful";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -22,6 +31,20 @@ type EntryCardProps = {
   children?: React.ReactNode;
 };
 
+type OrderRecord = {
+  parentEntryId: string;
+  parentDisplayName: string;
+  fieldName: string;
+  locale: string;
+  originalIds: string[];
+};
+
+type PendingChange = OrderRecord & { newIds: string[] };
+
+// ── Edit mode context ─────────────────────────────────────────────────────
+// Separates "selection is always on" from "dragging is on"
+const EditModeContext = createContext(false);
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function getDisplayName(
@@ -37,6 +60,98 @@ function getDisplayName(
     pick("name") ??
     pick("slug") ??
     fallback) as string;
+}
+
+/** Finds the field name on a section entry that contains entry links matching the given IDs */
+function findEntryLinkArrayField(
+  fields: Record<string, any>,
+  locale: string,
+  targetIds: string[],
+): string | null {
+  for (const [fieldName, localeMap] of Object.entries(fields)) {
+    const val =
+      (localeMap as any)?.[locale] ??
+      (Object.values((localeMap as any) ?? {}) as any[])[0];
+    if (
+      Array.isArray(val) &&
+      val.length > 0 &&
+      val[0]?.sys?.linkType === "Entry" &&
+      targetIds.some((id) => val.some((v: any) => v.sys?.id === id))
+    )
+      return fieldName;
+  }
+  return null;
+}
+
+/** Builds a map of parentEntryId → OrderRecord from the resolved tree */
+function buildOrderMap(
+  root: ResolvedEntry,
+  locale: string,
+): Map<string, OrderRecord> {
+  const map = new Map<string, OrderRecord>();
+
+  const sectionsLocaleMap = root.fields["sections"];
+  const sectionsVal: any[] =
+    sectionsLocaleMap?.[locale] ??
+    (sectionsLocaleMap
+      ? (Object.values(sectionsLocaleMap) as any[])[0]
+      : undefined) ??
+    [];
+  if (sectionsVal.length > 0) {
+    map.set(root.id, {
+      parentEntryId: root.id,
+      parentDisplayName: root.displayName,
+      fieldName: "sections",
+      locale,
+      originalIds: sectionsVal.map((v: any) => v.sys.id as string),
+    });
+  }
+
+  for (const section of root.children) {
+    const containerIds = section.children.map((c) => c.id);
+    if (containerIds.length > 0) {
+      const fieldName = findEntryLinkArrayField(
+        section.fields,
+        locale,
+        containerIds,
+      );
+      if (fieldName) {
+        const lm = (section.fields as any)[fieldName];
+        const val: any[] =
+          lm?.[locale] ?? (Object.values(lm ?? {}) as any[])[0] ?? [];
+        if (val.length > 0) {
+          map.set(section.id, {
+            parentEntryId: section.id,
+            parentDisplayName: section.displayName,
+            fieldName,
+            locale,
+            originalIds: val.map((v: any) => v.sys.id as string),
+          });
+        }
+      }
+    }
+
+    for (const container of section.children) {
+      const compLocaleMap = container.fields["components"];
+      const compVal: any[] =
+        compLocaleMap?.[locale] ??
+        (compLocaleMap
+          ? (Object.values(compLocaleMap) as any[])[0]
+          : undefined) ??
+        [];
+      if (compVal.length > 0) {
+        map.set(container.id, {
+          parentEntryId: container.id,
+          parentDisplayName: container.displayName,
+          fieldName: "components",
+          locale,
+          originalIds: compVal.map((v: any) => v.sys.id as string),
+        });
+      }
+    }
+  }
+
+  return map;
 }
 
 /** Reads only the `sections` array field from a page entry */
@@ -84,6 +199,67 @@ function getContainerComponentIds(
     .map((v: any) => v.sys.id as string);
 }
 
+/** Try to find a usable image URL from any field in an entry */
+function findImageUrl(
+  fields: Record<string, any>,
+  locale: string,
+): string | null {
+  function extractUrl(val: any): string | null {
+    if (val === null || val === undefined) return null;
+    // Resolved CDA asset: { sys: { type: "Asset" }, fields: { file: { url: "//..." } } }
+    if (
+      val?.sys?.type === "Asset" &&
+      typeof val?.fields?.file?.url === "string"
+    ) {
+      const u = val.fields.file.url as string;
+      return u.startsWith("//") ? `https:${u}` : u;
+    }
+    // Contentful file object directly: { url: "//images.ctfassets.net/..." }
+    if (typeof val?.url === "string" && val.url.includes("ctfassets.net")) {
+      const u = val.url as string;
+      return u.startsWith("//") ? `https:${u}` : u;
+    }
+    // Nested: { file: { url: "//..." } }
+    if (typeof val?.file?.url === "string") {
+      const u = val.file.url as string;
+      return u.startsWith("//") ? `https:${u}` : u;
+    }
+    // Direct URL string — image extension or ctfassets hostname
+    if (typeof val === "string") {
+      if (
+        /\.(jpe?g|png|gif|webp|svg|avif)(\?.*)?$/i.test(val) ||
+        val.includes("ctfassets.net")
+      ) {
+        return val.startsWith("//") ? `https:${val}` : val;
+      }
+    }
+    // Array — take first resolvable element
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        const found = extractUrl(item);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  for (const [, localeMap] of Object.entries(fields)) {
+    const val =
+      (localeMap as any)?.[locale] ??
+      (Object.values((localeMap as any) ?? {}) as any[])[0];
+    const found = extractUrl(val);
+    if (found) return found;
+    // Also search one level deeper into plain objects (e.g. image: { url, title })
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      for (const subVal of Object.values(val)) {
+        const sub = extractUrl(subVal);
+        if (sub) return sub;
+      }
+    }
+  }
+  return null;
+}
+
 function scalarFields(
   fields: Record<string, any>,
   locale: string,
@@ -108,15 +284,11 @@ function scalarFields(
   return results;
 }
 
-// ── Shared drag handle icon ───────────────────────────────────────────────
+// ── Drag grip icon ────────────────────────────────────────────────────────
 
-function DragHandle() {
+function GripIcon() {
   return (
-    <svg
-      viewBox="0 0 10 16"
-      className="w-2.5 h-4 text-current shrink-0"
-      fill="currentColor"
-    >
+    <svg viewBox="0 0 10 16" className="w-2.5 h-4 shrink-0" fill="currentColor">
       <circle cx="2" cy="2" r="1.5" />
       <circle cx="8" cy="2" r="1.5" />
       <circle cx="2" cy="8" r="1.5" />
@@ -127,27 +299,680 @@ function DragHandle() {
   );
 }
 
+// ── Floating editor badge (shown on hover / select) ───────────────────────
+
+function EditorBadge({
+  label,
+  visible,
+  dragRef,
+  color,
+}: {
+  label: string;
+  visible: boolean;
+  dragRef?: (el: HTMLElement | null) => void;
+  color: string;
+}) {
+  const editMode = useContext(EditModeContext);
+  return (
+    <div
+      className={`absolute top-0 left-0 z-30 flex items-stretch transition-opacity duration-100 ${
+        visible ? "opacity-100" : "opacity-0 pointer-events-none"
+      }`}
+    >
+      {/* Only attach drag ref when actively in edit mode */}
+      {dragRef && (
+        <div
+          ref={editMode ? (dragRef as any) : undefined}
+          title={editMode ? "Drag to reorder" : undefined}
+          className={`${color} flex items-center justify-center px-1.5 text-white ${
+            editMode ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+          }`}
+        >
+          <GripIcon />
+        </div>
+      )}
+      <div
+        className={`${color} px-2 py-0.5 text-white text-[10px] font-semibold tracking-wide whitespace-nowrap`}
+      >
+        {label}
+      </div>
+    </div>
+  );
+}
+
+// ── Visual component shape guesser ──────────────────────────────────────
+
+function guessRole(
+  contentTypeId: string,
+):
+  | "hero"
+  | "split"
+  | "steps"
+  | "cards"
+  | "card"
+  | "banner"
+  | "faq"
+  | "terms"
+  | "partner"
+  | "text"
+  | "image"
+  | "button"
+  | "generic" {
+  const id = contentTypeId.toLowerCase();
+  if (/hero/.test(id)) return "hero";
+  if (/banner|promo|callout|highlight|notification|alert|info/.test(id))
+    return "banner";
+  if (/split|imagewith|withimage|sideby|twocol|half/.test(id)) return "split";
+  if (/step|numbered|howit|how_it|howitwork|instruction|process/.test(id))
+    return "steps";
+  if (/faq|accordion|question|collapse|expand/.test(id)) return "faq";
+  if (/term|legal|condition|tnc|t_and_c|tandcs/.test(id)) return "terms";
+  if (/partner|voucher.*pick|pick.*voucher|retailer|merchant/.test(id))
+    return "partner";
+  // text/richtext before cards so "textBlock" doesn't match "block"
+  if (/text|richtext|body|prose|paragraph|copy|editorial/.test(id))
+    return "text";
+  // plural / grid → cards; singular → card
+  if (/cards|grid|tiles|features|teasers|reasons|benefits/.test(id))
+    return "cards";
+  if (/card|tile|feature|teaser|reason|benefit|item|block/.test(id))
+    return "card";
+  if (/image|photo|media|picture|gallery/.test(id)) return "image";
+  if (/button|cta|action|link/.test(id)) return "button";
+  return "generic";
+}
+
+/** Bg image with graceful error fallback */
+function BgImage({ src, alt }: { src: string | null; alt: string }) {
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="absolute inset-0 w-full h-full object-cover"
+      onError={(e) => {
+        (e.currentTarget as HTMLImageElement).style.display = "none";
+      }}
+    />
+  );
+}
+
+/** Visual stand-in for a component — styled per its role */
+function ComponentVisual({
+  contentTypeId,
+  displayName,
+  fields,
+  locale,
+}: {
+  contentTypeId: string;
+  displayName: string;
+  fields: Record<string, any>;
+  locale: string;
+}) {
+  const role = guessRole(contentTypeId);
+  const scalars = scalarFields(fields, locale, 4);
+  const title = scalars[0]?.[1] ?? displayName;
+  const imgUrl = findImageUrl(fields, locale);
+
+  // ── Hero ──────────────────────────────────────────────────────────────────
+  if (role === "hero") {
+    return (
+      <div className="w-full relative overflow-hidden bg-slate-800 min-h-40">
+        <BgImage src={imgUrl} alt={displayName} />
+        <div className="relative px-8 py-10 flex flex-col gap-3 bg-linear-to-r from-black/50 to-transparent">
+          <p className="text-[9px] font-mono text-slate-300/70 uppercase tracking-widest">
+            {contentTypeId}
+          </p>
+          <div className="h-7 w-3/5 bg-white/30 rounded" />
+          <div className="h-4 w-2/5 bg-white/20 rounded" />
+          <div className="h-3 w-1/2 bg-white/15 rounded" />
+          <div className="flex gap-2 mt-2">
+            <div className="h-8 w-28 bg-white/70 rounded" />
+            <div className="h-8 w-24 border border-white/40 rounded" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Banner / promo strip ──────────────────────────────────────────────────
+  if (role === "banner") {
+    return (
+      <div className="w-full bg-slate-700 relative overflow-hidden">
+        <BgImage src={imgUrl} alt={displayName} />
+        <div className="relative px-6 py-4 flex items-center gap-4 bg-slate-800/70">
+          <div className="flex flex-col gap-1.5 flex-1">
+            <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+              {contentTypeId}
+            </p>
+            <div className="h-4 w-3/5 bg-slate-400/60 rounded" />
+            <div className="h-2.5 w-2/5 bg-slate-500/60 rounded" />
+          </div>
+          <div className="h-8 w-20 bg-white/20 border border-white/30 rounded shrink-0" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Split: image + text side by side ─────────────────────────────────────
+  if (role === "split") {
+    return (
+      <div className="w-full flex">
+        {/* Image side */}
+        <div
+          className="w-1/2 relative bg-slate-200 overflow-hidden"
+          style={{ minHeight: 120 }}
+        >
+          {imgUrl ? (
+            <img
+              src={imgUrl}
+              alt={displayName}
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <svg
+                className="w-8 h-8 text-slate-300"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1}
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 15l-5-5L5 21"
+                />
+              </svg>
+            </div>
+          )}
+        </div>
+        {/* Text side */}
+        <div className="w-1/2 px-5 py-5 flex flex-col gap-2 bg-white">
+          <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+            {contentTypeId}
+          </p>
+          <div className="h-5 w-4/5 bg-slate-200 rounded" />
+          <div className="flex flex-col gap-1 mt-1">
+            <div className="h-2 bg-slate-100 rounded-full w-full" />
+            <div className="h-2 bg-slate-100 rounded-full w-11/12" />
+            <div className="h-2 bg-slate-100 rounded-full w-4/5" />
+            <div className="h-2 bg-slate-100 rounded-full w-3/4" />
+          </div>
+          <div className="h-7 w-24 bg-slate-700 rounded mt-2" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Numbered steps / how it works ─────────────────────────────────────────
+  if (role === "steps") {
+    return (
+      <div className="w-full px-6 py-5 flex flex-col gap-4 bg-slate-50">
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+          {contentTypeId}
+        </p>
+        {[1, 2, 3].map((n) => (
+          <div key={n} className="flex items-start gap-4">
+            <div className="w-8 h-8 rounded-full bg-slate-700 text-white text-xs font-bold flex items-center justify-center shrink-0">
+              {String(n).padStart(2, "0")}
+            </div>
+            <div className="flex flex-col gap-1 flex-1 pt-1">
+              <div className="h-3.5 bg-slate-200 rounded w-2/3" />
+              <div className="h-2 bg-slate-100 rounded w-full" />
+              <div className="h-2 bg-slate-100 rounded w-5/6" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Feature / product card grid ────────────────────────────────────────────
+  if (role === "cards") {
+    return (
+      <div className="w-full px-4 py-4 bg-white flex flex-col gap-2">
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+          {contentTypeId}
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="flex flex-col rounded overflow-hidden border border-slate-100"
+            >
+              <div className="w-full h-16 bg-slate-200" />
+              <div className="px-2 py-2 flex flex-col gap-1">
+                <div className="h-2.5 bg-slate-200 rounded w-3/4" />
+                <div className="h-2 bg-slate-100 rounded w-full" />
+                <div className="h-2 bg-slate-100 rounded w-5/6" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Partner / voucher picker ──────────────────────────────────────────────
+  if (role === "partner") {
+    return (
+      <div className="w-full px-4 py-4 bg-white flex flex-col gap-2">
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+          {contentTypeId}
+        </p>
+        <div className="flex gap-4">
+          {[0, 1].map((i) => (
+            <div
+              key={i}
+              className="flex-1 flex flex-col rounded-lg overflow-hidden border border-slate-200 bg-slate-50"
+            >
+              {imgUrl && i === 0 ? (
+                <img
+                  src={imgUrl}
+                  alt={title}
+                  className="w-full h-20 object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display =
+                      "none";
+                  }}
+                />
+              ) : (
+                <div className="w-full h-20 bg-slate-200" />
+              )}
+              <div className="px-3 py-2 flex flex-col gap-1.5">
+                <div className="h-3 bg-slate-300 rounded w-1/2" />
+                <div className="h-2 bg-slate-100 rounded w-full" />
+                <div className="h-2 bg-slate-100 rounded w-4/5" />
+                <div className="flex gap-1.5 mt-1">
+                  <div className="h-6 w-14 bg-slate-700 rounded" />
+                  <div className="h-6 w-16 border border-slate-300 rounded" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── FAQ accordion ─────────────────────────────────────────────────────────
+  if (role === "faq") {
+    return (
+      <div className="w-full px-5 py-4 flex flex-col gap-0 divide-y divide-slate-100 bg-white">
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest pb-3">
+          {contentTypeId}
+        </p>
+        {[0.7, 0.5, 0.6, 0.55].map((w, i) => (
+          <div key={i} className="flex items-center gap-3 py-3">
+            <div
+              className="h-2.5 bg-slate-200 rounded flex-1"
+              style={{ width: `${w * 100}%` }}
+            />
+            <svg
+              className="w-3.5 h-3.5 text-slate-300 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Terms / legal accordion ───────────────────────────────────────────────
+  if (role === "terms") {
+    return (
+      <div className="w-full px-5 py-4 flex flex-col gap-0 divide-y divide-slate-100 bg-slate-50">
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest pb-3">
+          {contentTypeId}
+        </p>
+        {[0.6, 0.5].map((w, i) => (
+          <div key={i} className="flex items-center gap-3 py-3">
+            <div
+              className="h-2.5 bg-slate-300 rounded"
+              style={{ width: `${w * 100}%` }}
+            />
+            <svg
+              className="w-3 h-3 text-slate-300 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Image ─────────────────────────────────────────────────────────────────
+  if (role === "image") {
+    if (imgUrl) {
+      return (
+        <div className="w-full bg-slate-100 overflow-hidden">
+          <img
+            src={imgUrl}
+            alt={displayName}
+            className="w-full h-auto max-h-52 object-cover"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="w-full bg-slate-200 flex flex-col items-center justify-center gap-2 py-10">
+        <svg
+          className="w-8 h-8 text-slate-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={1}
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 15l-5-5L5 21"
+          />
+        </svg>
+        <p className="text-[9px] font-mono text-slate-400">{contentTypeId}</p>
+      </div>
+    );
+  }
+
+  // ── CTA button group ──────────────────────────────────────────────────────
+  if (role === "button") {
+    const scalars2 = scalarFields(fields, locale, 2);
+    const label1 = scalars2[0]?.[1] ?? title;
+    const label2 = scalars2[1]?.[1];
+    return (
+      <div className="flex flex-wrap items-center gap-2 py-3 px-3">
+        <div className="h-8 px-5 bg-slate-800 rounded text-white text-xs font-medium flex items-center">
+          {label1.slice(0, 24)}
+        </div>
+        {label2 && (
+          <div className="h-8 px-5 border border-slate-300 rounded text-slate-500 text-xs flex items-center">
+            {label2.slice(0, 24)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Text / rich content ───────────────────────────────────────────────────
+  if (role === "text") {
+    return (
+      <div className="flex flex-col gap-3 py-6 px-6 bg-white">
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+          {contentTypeId}
+        </p>
+        {/* Title */}
+        <div className="h-6 w-3/5 bg-slate-800/20 rounded" />
+        {/* Description paragraph */}
+        <div className="flex flex-col gap-1.5 mt-1">
+          <div className="h-2.5 bg-slate-200 rounded w-full" />
+          <div className="h-2.5 bg-slate-200 rounded w-11/12" />
+          <div className="h-2.5 bg-slate-200 rounded w-4/5" />
+          <div className="h-2.5 bg-slate-100 rounded w-2/3" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Single card ───────────────────────────────────────────────────────────
+  if (role === "card") {
+    return (
+      <div className="flex flex-col bg-white rounded overflow-hidden border border-slate-100">
+        {imgUrl ? (
+          <img
+            src={imgUrl}
+            alt={displayName}
+            className="w-full h-28 object-cover"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div className="w-full h-28 bg-slate-200" />
+        )}
+        <div className="px-4 py-3 flex flex-col gap-2">
+          <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+            {contentTypeId}
+          </p>
+          {/* Title */}
+          <div className="h-4 w-2/3 bg-slate-700/25 rounded" />
+          {/* Description */}
+          <div className="flex flex-col gap-1">
+            <div className="h-2 bg-slate-100 rounded w-full" />
+            <div className="h-2 bg-slate-100 rounded w-5/6" />
+            <div className="h-2 bg-slate-100 rounded w-3/4" />
+          </div>
+          {/* CTA */}
+          <div className="h-7 w-20 bg-slate-700 rounded mt-1" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Generic / card fallback ───────────────────────────────────────────────
+  return (
+    <div className="flex flex-col gap-0 bg-white">
+      {imgUrl ? (
+        <img
+          src={imgUrl}
+          alt={displayName}
+          className="w-full h-28 object-cover"
+          onError={(e) => {
+            const el = e.currentTarget as HTMLImageElement;
+            el.style.display = "none";
+            const ph = el.nextElementSibling as HTMLElement | null;
+            if (ph) ph.style.display = "block";
+          }}
+        />
+      ) : null}
+      <div
+        className="w-full h-28 bg-slate-200"
+        style={{ display: imgUrl ? "none" : "block" }}
+      />
+      <div className="px-3 pb-3 pt-2 flex flex-col gap-1">
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+          {contentTypeId}
+        </p>
+        <div className="h-4 w-3/4 bg-slate-200 rounded" />
+        <div className="h-2.5 w-1/2 bg-slate-100 rounded" />
+      </div>
+    </div>
+  );
+}
+
+// ── Contentful link helper ────────────────────────────────────────────────
+
+function contentfulEntryUrl(entryId: string): string {
+  const space = localStorage.getItem("contentfulSpaceId") ?? "";
+  const env = localStorage.getItem("contentfulEnvironment") ?? "master";
+  return `https://app.contentful.com/spaces/${space}/environments/${env}/entries/${entryId}`;
+}
+
+function ContentfulLink({
+  entryId,
+  label,
+}: {
+  entryId: string;
+  label?: string;
+}) {
+  return (
+    <a
+      href={contentfulEntryUrl(entryId)}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      title={`Open in Contentful: ${entryId}`}
+      className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-500 transition-colors shrink-0"
+    >
+      <svg
+        className="w-3 h-3 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+        />
+      </svg>
+      {label ?? "Open"}
+    </a>
+  );
+}
+
+// ── Field display ─────────────────────────────────────────────────────────
+
+function renderFieldValue(val: any): string | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "boolean") return val ? "true" : "false";
+  if (typeof val === "number") return String(val);
+  if (typeof val === "string")
+    return val.length > 120 ? val.slice(0, 120) + "…" : val;
+  if (typeof val === "object") {
+    if ("nodeType" in val) return "(rich text)";
+    if (val?.sys?.type === "Link" && val?.sys?.linkType === "Asset")
+      return "(asset)";
+    if (val?.sys?.type === "Link") return `→ ${val.sys.id}`;
+    if (Array.isArray(val)) {
+      if (val.length === 0) return "(empty)";
+      if (val[0]?.sys?.type === "Link") return `→ [${val.length} refs]`;
+      return `[${val.length} items]`;
+    }
+  }
+  return null;
+}
+
+function FieldsDisplay({
+  fields,
+  locale,
+}: {
+  fields: Record<string, any>;
+  locale: string;
+}) {
+  const rows: Array<{
+    key: string;
+    value: string;
+    isRef: boolean;
+    isRich: boolean;
+  }> = [];
+
+  for (const [fieldId, localeMap] of Object.entries(fields)) {
+    const val =
+      (localeMap as any)?.[locale] ??
+      (Object.values((localeMap as any) ?? {}) as any[])[0];
+    const rendered = renderFieldValue(val);
+    if (!rendered) continue;
+
+    const isRef =
+      typeof val === "object" &&
+      !Array.isArray(val) &&
+      (val?.sys?.type === "Link" ||
+        (Array.isArray(val) && val[0]?.sys?.type === "Link"));
+    const isRich =
+      typeof val === "object" && !Array.isArray(val) && "nodeType" in val;
+    const isLinkArr =
+      Array.isArray(val) && val.length > 0 && val[0]?.sys?.type === "Link";
+
+    rows.push({
+      key: fieldId,
+      value: rendered,
+      isRef: isRef || isLinkArr,
+      isRich,
+    });
+  }
+
+  if (rows.length === 0)
+    return <p className="text-xs text-gray-400 italic">No fields</p>;
+
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 w-full">
+      {rows.map(({ key, value, isRef, isRich }) => (
+        <>
+          <dt
+            key={`dt-${key}`}
+            className="font-mono text-[10px] text-gray-400 whitespace-nowrap self-start pt-px"
+          >
+            {key}
+          </dt>
+          <dd
+            key={`dd-${key}`}
+            className={`text-xs wrap-break-word ${
+              isRef
+                ? "text-gray-400 italic"
+                : isRich
+                  ? "text-gray-400 italic"
+                  : "text-gray-700"
+            }`}
+          >
+            {value}
+          </dd>
+        </>
+      ))}
+    </dl>
+  );
+}
+
 // ── Craft.js Components ────────────────────────────────────────────────────
 
-/** Root canvas — represents the page itself */
+/** Root canvas — simulates the page viewport */
 function PageCanvas({ children }: { children?: React.ReactNode }) {
   const {
     connectors: { connect },
   } = useNode();
   return (
-    <div
-      ref={(r) => {
-        if (r) connect(r);
-      }}
-      className="min-h-full p-6 bg-gray-100 flex flex-col gap-3"
-    >
-      {children}
+    <div className="min-h-full bg-neutral-200 pt-8 pb-16">
+      <div
+        ref={(r) => {
+          if (r) connect(r);
+        }}
+        className="bg-white mx-auto min-h-screen flex flex-col"
+        style={{ maxWidth: 900 }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
-PageCanvas.craft = { displayName: "Page", isCanvas: true };
+PageCanvas.craft = {
+  displayName: "Page",
+  isCanvas: true,
+  rules: {
+    canMoveIn: (incoming: any[]) =>
+      incoming.every((n) => n.data?.displayName === "Section"),
+  },
+};
 
-/** A top-level page section */
+/** A full-bleed page section — looks like a real page band */
 function SectionCard({
   entryId,
   contentTypeId,
@@ -164,94 +989,59 @@ function SectionCard({
     selected: n.events.selected,
     hovered: n.events.hovered,
   }));
-  const [open, setOpen] = useState(true);
-  const preview = scalarFields(fields, locale, 2);
+
+  const active = selected || hovered;
 
   return (
     <div
       ref={(r) => {
         if (r) connect(r);
       }}
-      className={`rounded-xl overflow-hidden transition-all duration-150 ${
-        selected
-          ? "ring-2 ring-indigo-500 shadow-lg shadow-indigo-100"
+      className="relative w-full"
+      style={{
+        outline: selected
+          ? "2px solid #3b82f6"
           : hovered
-            ? "ring-1 ring-indigo-300 shadow-md"
-            : "ring-1 ring-gray-200 shadow-sm"
-      }`}
+            ? "2px solid #93c5fd"
+            : "none",
+        outlineOffset: "-2px",
+      }}
     >
-      {/* Header */}
-      <div
-        className={`flex items-center gap-0 ${
-          selected
-            ? "bg-indigo-600"
-            : hovered
-              ? "bg-indigo-500"
-              : "bg-indigo-500"
-        }`}
-      >
-        {/* Drag handle */}
-        <div
-          ref={(r) => {
-            if (r) drag(r);
-          }}
-          title="Drag to reorder"
-          className="flex items-center justify-center w-8 self-stretch cursor-grab active:cursor-grabbing text-indigo-300 hover:text-white transition-colors shrink-0"
-        >
-          <DragHandle />
-        </div>
-        {/* Click area to expand */}
-        <button
-          onClick={() => setOpen((p) => !p)}
-          className="flex items-center gap-2 flex-1 min-w-0 py-3 pr-4 text-left"
-        >
-          <span className="text-[10px] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded shrink-0 tracking-wide">
-            SECTION
-          </span>
-          <span className="text-[10px] font-medium bg-indigo-400/40 text-indigo-100 px-1.5 py-0.5 rounded shrink-0">
-            {contentTypeId}
-          </span>
-          <span className="font-semibold text-white text-sm flex-1 truncate">
-            {displayName}
-          </span>
-          {preview.map(([, v]) => (
-            <span
-              key={v}
-              className="text-[10px] text-indigo-200 truncate max-w-28 hidden md:block"
-            >
-              {v}
-            </span>
-          ))}
-          <svg
-            className={`w-3.5 h-3.5 text-indigo-200 transition-transform duration-200 shrink-0 ${
-              open ? "rotate-180" : ""
-            }`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
-      </div>
+      <EditorBadge
+        label={`Section · ${contentTypeId}`}
+        visible={active}
+        dragRef={(r) => {
+          if (r) drag(r);
+        }}
+        color="bg-blue-500"
+      />
 
-      {/* Body */}
-      {open && (
-        <div className="p-3 bg-white flex flex-col gap-2 border-t border-indigo-100">
-          {children}
+      {/* Always-visible section boundary */}
+      <div className="border-t border-dashed border-gray-200 relative">
+        {/* Section label pill */}
+        <div className="absolute -top-2.5 left-12 z-10 flex items-center gap-2">
+          <span className="bg-white border border-gray-200 rounded px-2 py-0.5 text-[9px] font-mono text-gray-400 leading-none">
+            {contentTypeId} · {displayName}
+          </span>
+          <ContentfulLink entryId={entryId} />
         </div>
-      )}
+
+        {/* Section body */}
+        <div className="w-full py-14 px-12 flex flex-col gap-6">{children}</div>
+      </div>
     </div>
   );
 }
-SectionCard.craft = { displayName: "Section", isCanvas: true };
+SectionCard.craft = {
+  displayName: "Section",
+  isCanvas: true,
+  rules: {
+    canMoveIn: (incoming: any[]) =>
+      incoming.every((n) => n.data?.displayName === "Container"),
+  },
+};
 
-/** A container inside a section — canvas that holds components */
+/** A layout row — arranges child components side by side */
 function ContainerCard({
   entryId,
   contentTypeId,
@@ -268,86 +1058,63 @@ function ContainerCard({
     selected: n.events.selected,
     hovered: n.events.hovered,
   }));
-  const [open, setOpen] = useState(true);
-  const preview = scalarFields(fields, locale, 2);
+
+  const active = selected || hovered;
 
   return (
     <div
       ref={(r) => {
         if (r) connect(r);
       }}
-      className={`rounded-lg overflow-hidden transition-all duration-150 ${
-        selected
-          ? "ring-2 ring-amber-500 shadow-md shadow-amber-100"
+      className="relative w-full rounded-sm"
+      style={{
+        outline: selected
+          ? "2px solid #8b5cf6"
           : hovered
-            ? "ring-1 ring-amber-300 shadow-sm"
-            : "ring-1 ring-amber-200/80"
-      }`}
+            ? "2px dashed #c4b5fd"
+            : "none",
+        outlineOffset: "-2px",
+        background: selected
+          ? "rgba(139,92,246,0.03)"
+          : hovered
+            ? "rgba(139,92,246,0.02)"
+            : "rgba(0,0,0,0.015)",
+      }}
     >
-      <div
-        className={`flex items-center gap-0 ${
-          selected ? "bg-amber-500" : hovered ? "bg-amber-400" : "bg-amber-400"
-        }`}
-      >
-        {/* Drag handle */}
-        <div
-          ref={(r) => {
-            if (r) drag(r);
-          }}
-          title="Drag to reorder"
-          className="flex items-center justify-center w-7 self-stretch cursor-grab active:cursor-grabbing text-amber-200 hover:text-white transition-colors shrink-0"
-        >
-          <DragHandle />
-        </div>
-        <button
-          onClick={() => setOpen((p) => !p)}
-          className="flex items-center gap-2 flex-1 min-w-0 py-2 pr-3 text-left"
-        >
-          <span className="text-[10px] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded shrink-0 tracking-wide">
-            CONTAINER
-          </span>
-          <span className="text-[10px] font-medium bg-amber-300/40 text-amber-100 px-1.5 py-0.5 rounded shrink-0">
-            {contentTypeId}
-          </span>
-          <span className="font-medium text-white text-xs flex-1 truncate">
-            {displayName}
-          </span>
-          {preview.map(([, v]) => (
-            <span
-              key={v}
-              className="text-[10px] text-amber-100 truncate max-w-24 hidden md:block"
-            >
-              {v}
-            </span>
-          ))}
-          <svg
-            className={`w-3 h-3 text-amber-100 transition-transform duration-200 shrink-0 ${
-              open ? "rotate-180" : ""
-            }`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
+      <EditorBadge
+        label={`Container · ${contentTypeId}`}
+        visible={active}
+        dragRef={(r) => {
+          if (r) drag(r);
+        }}
+        color="bg-violet-500"
+      />
+
+      {/* Always-visible container label */}
+      <div className="px-2 pt-2 pb-1 flex items-center gap-2">
+        <span className="text-[9px] font-mono text-gray-300 uppercase tracking-widest">
+          {contentTypeId} · {displayName}
+        </span>
+        <ContentfulLink entryId={entryId} />
       </div>
-      {open && (
-        <div className="p-2 bg-amber-50/50 flex flex-col gap-1.5 border-t border-amber-100">
-          {children}
-        </div>
-      )}
+
+      {/* Column row — children share equal width, separated by a dashed divider */}
+      <div className="flex flex-row w-full divide-x divide-dashed divide-gray-200 *:flex-1 *:min-w-0 *:px-4 *:pb-4">
+        {children}
+      </div>
     </div>
   );
 }
-ContainerCard.craft = { displayName: "Container", isCanvas: true };
+ContainerCard.craft = {
+  displayName: "Container",
+  isCanvas: true,
+  rules: {
+    canMoveIn: (incoming: any[]) =>
+      incoming.every((n) => n.data?.displayName === "Component"),
+  },
+};
 
-/** A leaf component inside a container */
+/** A leaf component — visual shape + key field data */
 function ComponentCard({
   entryId,
   contentTypeId,
@@ -363,66 +1130,48 @@ function ComponentCard({
     selected: n.events.selected,
     hovered: n.events.hovered,
   }));
-  const preview = scalarFields(fields, locale, 3);
+
+  const active = selected || hovered;
 
   return (
     <div
       ref={(r) => {
         if (r) connect(r);
       }}
-      className={`rounded-md overflow-hidden transition-all duration-150 ${
-        selected
-          ? "ring-2 ring-emerald-500 shadow-sm shadow-emerald-100"
+      className="relative rounded border border-gray-200 bg-white overflow-hidden"
+      style={{
+        outline: selected
+          ? "2px solid #10b981"
           : hovered
-            ? "ring-1 ring-emerald-300"
-            : "ring-1 ring-gray-200"
-      } bg-white`}
+            ? "2px dashed #6ee7b7"
+            : "none",
+        outlineOffset: "-2px",
+      }}
     >
-      <div className="flex items-center gap-0">
-        {/* Drag handle */}
-        <div
-          ref={(r) => {
-            if (r) drag(r);
-          }}
-          title="Drag to reorder"
-          className={`flex items-center justify-center w-6 self-stretch cursor-grab active:cursor-grabbing transition-colors shrink-0 ${
-            selected
-              ? "bg-emerald-500 text-white"
-              : "bg-gray-100 text-gray-300 hover:text-gray-500"
-          }`}
-        >
-          <DragHandle />
-        </div>
-        <div className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2">
-          <span
-            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
-              selected
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-emerald-500/10 text-emerald-600"
-            }`}
-          >
-            {contentTypeId}
-          </span>
-          <span className="font-medium text-gray-800 text-xs flex-1 truncate">
-            {displayName}
-          </span>
-          <span className="text-[10px] font-mono text-gray-300 shrink-0">
-            {entryId.slice(0, 8)}…
-          </span>
-        </div>
+      <EditorBadge
+        label={contentTypeId}
+        visible={active}
+        dragRef={(r) => {
+          if (r) drag(r);
+        }}
+        color="bg-emerald-500"
+      />
+
+      {/* Visual placeholder only — fields are in the properties panel */}
+      <ComponentVisual
+        contentTypeId={contentTypeId}
+        displayName={displayName}
+        fields={fields}
+        locale={locale}
+      />
+
+      {/* Minimal footer: type label + Contentful link */}
+      <div className="flex items-center gap-2 px-2 py-1 bg-white border-t border-gray-100">
+        <span className="text-[9px] font-mono text-gray-400 flex-1 truncate">
+          {contentTypeId}
+        </span>
+        <ContentfulLink entryId={entryId} />
       </div>
-      {preview.length > 0 && (
-        <div className="border-t border-gray-100 px-3 py-1.5 ml-6 flex flex-col gap-0.5">
-          {preview.map(([fieldId, val]) => (
-            <div key={fieldId} className="flex gap-2 text-xs">
-              <span className="font-mono text-gray-400 shrink-0 w-24 truncate">
-                {fieldId}
-              </span>
-              <span className="text-gray-600 truncate flex-1">{val}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -432,79 +1181,256 @@ const RESOLVER = { PageCanvas, SectionCard, ContainerCard, ComponentCard };
 
 // ── Properties panel ───────────────────────────────────────────────────────
 
-function PropertiesPanel({ locale }: { locale: string }) {
-  const { nodeProps } = useEditor((state) => {
-    const id = [...state.events.selected][0];
-    if (!id) return { nodeProps: null };
-    return { nodeProps: state.nodes[id]?.data?.props ?? null };
-  });
+/** Renders a single field value cell in the properties panel */
+function FieldValueCell({
+  fieldId,
+  val,
+  activeLocale,
+  selectedId,
+  actions,
+}: {
+  fieldId: string;
+  val: any;
+  activeLocale: string;
+  selectedId: string;
+  actions: any;
+}) {
+  const rendered = renderFieldValue(val);
 
-  if (!nodeProps) {
+  if (val === null || val === undefined || rendered === null) {
+    return <span className="text-xs text-gray-300 italic">—</span>;
+  }
+
+  const isRich =
+    typeof val === "object" && !Array.isArray(val) && "nodeType" in val;
+
+  // Single entry/asset link
+  if (
+    !Array.isArray(val) &&
+    typeof val === "object" &&
+    val?.sys?.type === "Link"
+  ) {
     return (
-      <div className="p-4 text-xs text-gray-400 italic">
-        Click a node on the canvas to inspect its properties.
+      <ContentfulLink
+        entryId={val.sys.id}
+        label={`${val.sys.linkType ?? "Entry"} → ${val.sys.id.slice(0, 8)}…`}
+      />
+    );
+  }
+
+  // Array of entry/asset links
+  if (Array.isArray(val) && val.length > 0 && val[0]?.sys?.type === "Link") {
+    return (
+      <div className="flex flex-col gap-1">
+        {(val as any[]).map((ref: any) => (
+          <ContentfulLink
+            key={ref.sys.id}
+            entryId={ref.sys.id}
+            label={`${ref.sys.linkType ?? "Entry"} → ${ref.sys.id.slice(0, 8)}…`}
+          />
+        ))}
       </div>
     );
   }
 
-  const { entryId, contentTypeId, displayName, fields } = nodeProps as any;
-  const allFields: Array<[string, string]> = [];
+  if (isRich) {
+    return <span className="text-xs text-gray-400 italic">(rich text)</span>;
+  }
 
-  for (const [fieldId, localeMap] of Object.entries(fields ?? {})) {
-    const val =
-      (localeMap as any)?.[locale] ??
-      (Object.values((localeMap as any) ?? {}) as any[])[0];
-    if (val === null || val === undefined) continue;
-    if (typeof val === "object") {
-      const isRich = "nodeType" in val;
-      const isLink = val?.sys?.type === "Link";
-      const isLinkArr =
-        Array.isArray(val) && (val as any)[0]?.sys?.type === "Link";
-      if (isRich) {
-        allFields.push([fieldId, "(rich text)"]);
-      } else if (isLink) {
-        allFields.push([fieldId, `→ ${val.sys.id}`]);
-      } else if (isLinkArr) {
-        allFields.push([fieldId, `→ [${(val as any[]).length} refs]`]);
+  const isEditable =
+    typeof val === "string" ||
+    typeof val === "number" ||
+    typeof val === "boolean";
+  const isLong = typeof val === "string" && val.length > 60;
+
+  function commit(newValue: string) {
+    actions.setProp(selectedId, (p: any) => {
+      if (!p.fields[fieldId]) p.fields[fieldId] = {};
+      const localeMap = p.fields[fieldId];
+      if (activeLocale in localeMap) {
+        localeMap[activeLocale] = newValue;
+      } else {
+        const firstKey = Object.keys(localeMap)[0];
+        if (firstKey) localeMap[firstKey] = newValue;
+        else localeMap[activeLocale] = newValue;
       }
-    } else {
-      allFields.push([fieldId, String(val)]);
-    }
+    });
+  }
+
+  if (isEditable && isLong) {
+    return (
+      <textarea
+        key={`${selectedId}-${fieldId}-${activeLocale}`}
+        defaultValue={String(val)}
+        rows={3}
+        onBlur={(e) => commit(e.currentTarget.value)}
+        className="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1.5 w-full resize-y focus:outline-none focus:border-blue-400 focus:bg-white transition-colors"
+      />
+    );
+  }
+
+  if (isEditable) {
+    return (
+      <input
+        key={`${selectedId}-${fieldId}-${activeLocale}`}
+        type="text"
+        defaultValue={String(val)}
+        onBlur={(e) => commit(e.currentTarget.value)}
+        className="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1 w-full focus:outline-none focus:border-blue-400 focus:bg-white transition-colors"
+      />
+    );
   }
 
   return (
-    <div className="p-4 flex flex-col gap-4">
-      {/* Identity */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-semibold bg-violet-500/15 text-violet-600 px-1.5 py-0.5 rounded">
-            {contentTypeId}
-          </span>
-          <span className="font-semibold text-gray-800 text-sm">
-            {displayName}
-          </span>
-        </div>
-        <p className="font-mono text-[10px] text-gray-400 break-all">
-          {entryId}
+    <span className="text-xs text-gray-400 italic wrap-break-word">
+      {rendered}
+    </span>
+  );
+}
+
+function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
+  const { selectedId, nodeProps, nodeRole, actions } = useEditor((state) => {
+    const id = [...state.events.selected][0];
+    if (!id || id === "ROOT")
+      return { selectedId: null, nodeProps: null, nodeRole: null };
+    return {
+      selectedId: id,
+      nodeProps: state.nodes[id]?.data?.props ?? null,
+      nodeRole: state.nodes[id]?.data?.displayName ?? null,
+    };
+  });
+
+  const { entryId, contentTypeId, displayName, fields } =
+    (nodeProps as any) ?? {};
+
+  // Collect all locale keys present across all fields
+  const allLocales = useMemo(() => {
+    const s = new Set<string>();
+    for (const localeMap of Object.values(fields ?? {})) {
+      for (const k of Object.keys((localeMap as any) ?? {})) s.add(k);
+    }
+    return s.size > 0 ? [...s] : [defaultLocale];
+  }, [fields, defaultLocale]);
+
+  const [activeLocale, setActiveLocale] = useState(defaultLocale);
+
+  // Keep active locale valid when node changes
+  const resolvedLocale = allLocales.includes(activeLocale)
+    ? activeLocale
+    : (allLocales[0] ?? defaultLocale);
+
+  if (!nodeProps || !selectedId) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 p-8 text-center h-full">
+        <svg
+          className="w-8 h-8 text-gray-200"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={1}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M15 15l-6-6m0 0l6-6m-6 6h12"
+          />
+        </svg>
+        <p className="text-xs text-gray-400">
+          Click any element on the canvas to inspect it.
         </p>
       </div>
+    );
+  }
 
-      {/* Fields */}
-      {allFields.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
-            Fields
+  const roleColor: Record<string, string> = {
+    Section: "bg-blue-50 text-blue-600 border-blue-200",
+    Container: "bg-violet-50 text-violet-600 border-violet-200",
+    Component: "bg-emerald-50 text-emerald-600 border-emerald-200",
+  };
+  const badge =
+    roleColor[nodeRole ?? ""] ?? "bg-gray-100 text-gray-500 border-gray-200";
+
+  const fieldEntries = Object.entries(fields ?? {});
+
+  return (
+    <div className="flex flex-col gap-0">
+      {/* Header */}
+      <div className="px-4 py-3 flex flex-col gap-2 border-b border-gray-100">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={`text-[9px] font-semibold border px-1.5 py-0.5 rounded uppercase tracking-widest ${badge}`}
+          >
+            {nodeRole}
           </span>
-          {allFields.map(([fieldId, val]) => (
-            <div key={fieldId} className="text-xs flex flex-col gap-0.5">
-              <span className="font-mono text-gray-400">{fieldId}</span>
-              <span className="text-gray-700 break-all">{val}</span>
-            </div>
+          <span
+            className={`text-[10px] font-mono border px-1.5 py-0.5 rounded ${badge}`}
+          >
+            {contentTypeId}
+          </span>
+        </div>
+        <p className="font-semibold text-gray-800 text-sm leading-tight">
+          {displayName}
+        </p>
+        <div className="flex items-center gap-2">
+          <p className="font-mono text-[9px] text-gray-400 truncate flex-1">
+            {entryId}
+          </p>
+          <ContentfulLink entryId={entryId} />
+        </div>
+      </div>
+
+      {/* Locale tabs — only show when there are multiple locales */}
+      {allLocales.length > 1 && (
+        <div className="flex border-b border-gray-100 bg-gray-50 shrink-0 overflow-x-auto">
+          {allLocales.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setActiveLocale(loc)}
+              className={`px-3 py-1.5 text-[10px] font-mono font-medium whitespace-nowrap transition-colors ${
+                resolvedLocale === loc
+                  ? "text-gray-800 border-b-2 border-gray-700 bg-white"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              {loc}
+            </button>
           ))}
         </div>
-      ) : (
-        <p className="text-xs text-gray-400">No fields.</p>
       )}
+
+      {/* Fields for active locale */}
+      <div className="px-4 py-3 flex flex-col gap-3">
+        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest">
+          Fields
+          {allLocales.length === 1 && (
+            <span className="ml-1.5 normal-case font-mono font-normal">
+              ({resolvedLocale})
+            </span>
+          )}
+        </p>
+        {fieldEntries.length === 0 && (
+          <p className="text-xs text-gray-400 italic">No fields</p>
+        )}
+        {fieldEntries.map(([fieldId, localeMap]) => {
+          const val =
+            (localeMap as any)?.[resolvedLocale] ??
+            (Object.values((localeMap as any) ?? {}) as any[])[0];
+          return (
+            <div key={fieldId} className="flex flex-col gap-0.5">
+              <label className="font-mono text-[10px] text-gray-400">
+                {fieldId}
+              </label>
+              <FieldValueCell
+                fieldId={fieldId}
+                val={val}
+                activeLocale={resolvedLocale}
+                selectedId={selectedId}
+                actions={actions}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -702,37 +1628,305 @@ function LayersPanel() {
   );
 }
 
+// ── Save controller (inside Editor) ───────────────────────────────────────
+
+function SaveController({
+  pageEntryId,
+  orderMap,
+  onChanges,
+}: {
+  pageEntryId: string;
+  orderMap: Map<string, OrderRecord>;
+  onChanges: (changes: PendingChange[]) => void;
+}) {
+  const { nodes } = useEditor((state) => ({ nodes: state.nodes }));
+  const onChangesRef = useRef(onChanges);
+  useEffect(() => {
+    onChangesRef.current = onChanges;
+  });
+
+  useEffect(() => {
+    if (!nodes || orderMap.size === 0) return;
+
+    // Map entryId → ordered child entryIds from current craft state
+    const entryToChildIds = new Map<string, string[]>();
+
+    // ROOT's children → section entryIds (page level)
+    const rootChildNodeIds: string[] = nodes["ROOT"]?.data?.nodes ?? [];
+    const pageChildIds = rootChildNodeIds
+      .map((nId) => nodes[nId]?.data?.props?.entryId as string)
+      .filter(Boolean);
+    entryToChildIds.set(pageEntryId, pageChildIds);
+
+    // All other non-leaf nodes
+    for (const node of Object.values(nodes) as any[]) {
+      const entryId = node.data?.props?.entryId as string;
+      if (!entryId) continue;
+      const childNodeIds: string[] = node.data?.nodes ?? [];
+      if (childNodeIds.length === 0) continue;
+      const childIds = childNodeIds
+        .map((nId: string) => nodes[nId]?.data?.props?.entryId as string)
+        .filter(Boolean);
+      entryToChildIds.set(entryId, childIds);
+    }
+
+    const changes: PendingChange[] = [];
+    for (const [parentId, record] of orderMap.entries()) {
+      const currentIds = entryToChildIds.get(parentId);
+      if (!currentIds) continue;
+      const changed =
+        currentIds.length !== record.originalIds.length ||
+        currentIds.some((id, i) => id !== record.originalIds[i]);
+      if (changed) {
+        changes.push({ ...record, newIds: currentIds });
+      }
+    }
+
+    onChangesRef.current(changes);
+  }, [nodes, orderMap, pageEntryId]);
+
+  return null;
+}
+
+// ── Save confirmation modal ────────────────────────────────────────────────
+
+function SaveConfirmModal({
+  changes,
+  saving,
+  saveError,
+  onConfirm,
+  onCancel,
+}: {
+  changes: PendingChange[];
+  saving: boolean;
+  saveError: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-800">
+            Save changes as draft
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            The following entries will be updated in Contentful but{" "}
+            <strong>not published</strong>.
+          </p>
+        </div>
+
+        {/* Change list */}
+        <div className="px-5 py-4 max-h-72 overflow-y-auto flex flex-col gap-4">
+          {changes.map((c) => (
+            <div key={c.parentEntryId} className="flex flex-col gap-1.5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-semibold text-gray-700">
+                  {c.parentDisplayName}
+                </span>
+                <span className="text-[10px] font-mono text-gray-400">
+                  {c.fieldName}
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 flex flex-col gap-1">
+                <div className="flex gap-1.5 items-start">
+                  <span className="shrink-0 text-gray-400 w-12 text-right">
+                    before
+                  </span>
+                  <span className="text-gray-500 break-all">
+                    {c.originalIds.join(" → ")}
+                  </span>
+                </div>
+                <div className="flex gap-1.5 items-start">
+                  <span className="shrink-0 text-gray-400 w-12 text-right">
+                    after
+                  </span>
+                  <span className="text-gray-700 font-medium break-all">
+                    {c.newIds.join(" → ")}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Error */}
+        {saveError && (
+          <p className="px-5 pb-2 text-xs text-red-500">{saveError}</p>
+        )}
+
+        {/* Actions */}
+        <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="text-xs px-3 py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={saving}
+            className="text-xs px-3 py-1.5 rounded bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {saving && (
+              <span
+                className="w-3 h-3 rounded-full border border-white border-t-transparent shrink-0"
+                style={{ animation: "spin 0.7s linear infinite" }}
+              />
+            )}
+            Save as draft
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Toolbar ────────────────────────────────────────────────────────────────
 
-function EditorToolbar() {
-  const { enabled, actions } = useEditor((state) => ({
-    enabled: state.options.enabled,
-  }));
+function EditorToolbar({
+  pendingChanges,
+  onSaveClick,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
+  fullscreen,
+  onFullscreenToggle,
+  onEditToggle,
+}: {
+  pendingChanges: PendingChange[];
+  onSaveClick: () => void;
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onZoomReset: () => void;
+  fullscreen: boolean;
+  onFullscreenToggle: () => void;
+  onEditToggle: () => void;
+}) {
+  const editMode = useContext(EditModeContext);
+  const hasChanges = pendingChanges.length > 0;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-300 bg-white shrink-0">
-      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">
+    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-200 bg-white shrink-0">
+      {/* Left: title */}
+      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1 select-none">
         Visual Editor
-        <span className="ml-2 text-[10px] font-normal text-gray-400 normal-case">
-          (scaffolding — editing coming soon)
-        </span>
       </span>
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <span className="text-xs text-gray-600">Enable editing</span>
+
+      {/* Zoom controls */}
+      <div className="flex items-center gap-0.5 border border-gray-200 rounded overflow-hidden">
+        <button
+          onClick={onZoomOut}
+          disabled={zoom <= 0.25}
+          title="Zoom out"
+          className="px-2 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <svg
+            className="w-3 h-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+          </svg>
+        </button>
+        <button
+          onClick={onZoomReset}
+          title="Reset zoom"
+          className="px-2 py-1 text-[10px] font-mono text-gray-600 hover:bg-gray-100 transition-colors min-w-9 text-center tabular-nums border-x border-gray-200"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          onClick={onZoomIn}
+          disabled={zoom >= 2}
+          title="Zoom in"
+          className="px-2 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <svg
+            className="w-3 h-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+        </button>
+      </div>
+
+      {/* Fullscreen */}
+      <button
+        onClick={onFullscreenToggle}
+        title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+        className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+      >
+        {fullscreen ? (
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 9L4 4m0 0v5m0-5h5M15 9l5-5m0 0v5m0-5h-5M9 15l-5 5m0 0v-5m0 5h5M15 15l5 5m0 0v-5m0 5h-5"
+            />
+          </svg>
+        ) : (
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5"
+            />
+          </svg>
+        )}
+      </button>
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-gray-200 mx-1" />
+
+      {/* Save */}
+      {hasChanges && (
+        <button
+          onClick={onSaveClick}
+          className="text-xs px-3 py-1.5 rounded bg-gray-800 text-white hover:bg-gray-700 font-medium flex items-center gap-1.5"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+          Save {pendingChanges.length} change
+          {pendingChanges.length > 1 ? "s" : ""}
+        </button>
+      )}
+
+      {/* Edit toggle */}
+      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+        <span className="text-xs text-gray-500">
+          {editMode ? "Editing" : "Viewing"}
+        </span>
         <div
-          onClick={() =>
-            actions.setOptions((o) => {
-              o.enabled = !o.enabled;
-            })
-          }
-          className={`relative w-9 h-5 rounded-full transition-colors ${
-            enabled ? "bg-blue-500" : "bg-gray-300"
-          }`}
+          onClick={onEditToggle}
+          className={`relative w-9 h-5 rounded-full transition-colors ${editMode ? "bg-gray-700" : "bg-gray-300"}`}
         >
           <span
-            className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-              enabled ? "translate-x-4" : ""
-            }`}
+            className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editMode ? "translate-x-4" : ""}`}
           />
         </div>
       </label>
@@ -750,17 +1944,39 @@ export function PageEditorTab({
   locale: string;
 }) {
   const [craftJson, setCraftJson] = useState<string | null>(null);
+  const [orderMap, setOrderMap] = useState<Map<string, OrderRecord>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<"layers" | "properties">(
-    "layers",
+    "properties",
   );
+  const [editMode, setEditMode] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  function adjustZoom(delta: number) {
+    setZoom((z) =>
+      Math.min(2, Math.max(0.25, Math.round((z + delta) * 4) / 4)),
+    );
+  }
+
+  // Ctrl/Cmd + wheel to zoom on the canvas
+  function handleWheel(e: React.WheelEvent) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    adjustZoom(e.deltaY < 0 ? 0.25 : -0.25);
+  }
 
   const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setCraftJson(null);
+    setPendingChanges([]);
 
     resolveTree(entryId, locale)
       .then((root) => {
@@ -769,6 +1985,7 @@ export function PageEditorTab({
           setError("Failed to resolve page entry.");
           return;
         }
+        setOrderMap(buildOrderMap(root, locale));
         setCraftJson(buildCraftJson(root, locale));
       })
       .catch((err: any) => {
@@ -785,11 +2002,48 @@ export function PageEditorTab({
 
   useEffect(() => load(), [load]);
 
+  async function handleSaveConfirm() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const environment = await getContentfulManagementEnvironment();
+      for (const change of pendingChanges) {
+        const cfEntry = await environment.getEntry(change.parentEntryId);
+        // Reconstruct entry-link array in new order
+        const newLinks = change.newIds.map((id) => ({
+          sys: { type: "Link", linkType: "Entry", id },
+        }));
+        cfEntry.fields[change.fieldName] ??= {};
+        cfEntry.fields[change.fieldName][change.locale] = newLinks;
+        await cfEntry.update(); // draft only — no .publish()
+      }
+      setShowConfirm(false);
+      setPendingChanges([]);
+      // Rebuild orderMap so future diffs are against the saved state
+      setOrderMap((prev) => {
+        const next = new Map(prev);
+        for (const change of pendingChanges) {
+          const existing = next.get(change.parentEntryId);
+          if (existing)
+            next.set(change.parentEntryId, {
+              ...existing,
+              originalIds: change.newIds,
+            });
+        }
+        return next;
+      });
+    } catch (err: any) {
+      setSaveError(err?.message ?? "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-gray-50 rounded-xl border border-gray-300 p-12">
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-gray-50 rounded-xl border border-gray-200 p-12">
         <div
-          className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent"
+          className="w-8 h-8 rounded-full border-2 border-gray-400 border-t-transparent"
           style={{ animation: "spin 0.8s linear infinite" }}
         />
         <p className="text-sm text-gray-500">
@@ -801,11 +2055,11 @@ export function PageEditorTab({
 
   if (error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-gray-50 rounded-xl border border-gray-300 p-12">
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-gray-50 rounded-xl border border-gray-200 p-12">
         <p className="text-sm text-red-500">{error}</p>
         <button
           onClick={load}
-          className="text-xs px-3 py-1.5 bg-gray-200 hover:bg-gray-300 rounded font-medium"
+          className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded font-medium"
         >
           Retry
         </button>
@@ -816,51 +2070,94 @@ export function PageEditorTab({
   if (!craftJson) return null;
 
   return (
-    // key forces re-mount when entry/locale changes so Frame picks up new data
-    <div
-      key={`${entryId}:${locale}`}
-      className="h-full flex flex-col overflow-hidden rounded-xl border border-gray-300 bg-white"
-    >
-      <Editor resolver={RESOLVER} enabled={false}>
-        <EditorToolbar />
+    <>
+      {showConfirm && (
+        <SaveConfirmModal
+          changes={pendingChanges}
+          saving={saving}
+          saveError={saveError}
+          onConfirm={handleSaveConfirm}
+          onCancel={() => {
+            setShowConfirm(false);
+            setSaveError(null);
+          }}
+        />
+      )}
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Canvas */}
-          <div className="flex-1 overflow-y-auto bg-gray-100">
-            <Frame data={craftJson} />
-          </div>
+      {/* key forces re-mount when entry/locale changes so Frame picks up new data */}
+      <div
+        key={`${entryId}:${locale}`}
+        className={`flex flex-col overflow-hidden border border-gray-200 bg-white ${
+          fullscreen ? "fixed inset-0 z-50 rounded-none" : "h-full rounded-xl"
+        }`}
+      >
+        <EditModeContext.Provider value={editMode}>
+          <Editor resolver={RESOLVER} enabled={true}>
+            <SaveController
+              pageEntryId={entryId}
+              orderMap={orderMap}
+              onChanges={setPendingChanges}
+            />
 
-          {/* Right panel */}
-          <div className="w-72 shrink-0 border-l border-gray-300 flex flex-col overflow-hidden">
-            {/* Panel tabs */}
-            <div className="flex border-b border-gray-200 bg-gray-50 shrink-0">
-              {(["layers", "properties"] as const).map((panel) => (
-                <button
-                  key={panel}
-                  onClick={() => setActivePanel(panel)}
-                  className={`flex-1 py-2 text-xs font-semibold capitalize transition-colors ${
-                    activePanel === panel
-                      ? "text-blue-600 border-b-2 border-blue-500 bg-white"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  {panel}
-                </button>
-              ))}
-            </div>
+            <EditorToolbar
+              pendingChanges={pendingChanges}
+              onSaveClick={() => {
+                setSaveError(null);
+                setShowConfirm(true);
+              }}
+              zoom={zoom}
+              onZoomIn={() => adjustZoom(0.25)}
+              onZoomOut={() => adjustZoom(-0.25)}
+              onZoomReset={() => setZoom(1)}
+              fullscreen={fullscreen}
+              onFullscreenToggle={() => setFullscreen((f) => !f)}
+              onEditToggle={() => setEditMode((m) => !m)}
+            />
 
-            <div className="flex-1 overflow-y-auto">
-              {activePanel === "layers" ? (
-                <div className="py-2">
-                  <LayersPanel />
+            <div className="flex flex-1 overflow-hidden">
+              {/* Canvas — Ctrl+wheel to zoom */}
+              <div
+                className="flex-1 overflow-auto bg-neutral-200"
+                onWheel={handleWheel}
+              >
+                <div style={{ zoom }}>
+                  <Frame data={craftJson} />
                 </div>
-              ) : (
-                <PropertiesPanel locale={locale} />
-              )}
+              </div>
+
+              {/* Right panel */}
+              <div className="w-96 shrink-0 border-l border-gray-200 flex flex-col overflow-hidden">
+                {/* Panel tabs */}
+                <div className="flex border-b border-gray-200 bg-gray-50 shrink-0">
+                  {(["properties", "layers"] as const).map((panel) => (
+                    <button
+                      key={panel}
+                      onClick={() => setActivePanel(panel)}
+                      className={`flex-1 py-2 text-xs font-semibold capitalize transition-colors ${
+                        activePanel === panel
+                          ? "text-gray-800 border-b-2 border-gray-700 bg-white"
+                          : "text-gray-400 hover:text-gray-600"
+                      }`}
+                    >
+                      {panel}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  {activePanel === "layers" ? (
+                    <div className="py-2">
+                      <LayersPanel />
+                    </div>
+                  ) : (
+                    <PropertiesPanel locale={locale} />
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </Editor>
-    </div>
+          </Editor>
+        </EditModeContext.Provider>
+      </div>
+    </>
   );
 }

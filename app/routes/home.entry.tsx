@@ -732,14 +732,14 @@ export default function EntryDetail() {
 
   if (!entry) {
     return (
-      <main className="flex-1 overflow-y-auto p-8 bg-gray-50">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
         <div className="pt-16 text-gray-600 text-sm">Entry not found.</div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 overflow-y-auto p-8 bg-gray-50">
+    <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
       {/* Header */}
       <div className="mb-4">
         <span className="text-xs font-semibold text-blue-600 bg-blue-500/15 px-2 py-0.5 rounded-full">

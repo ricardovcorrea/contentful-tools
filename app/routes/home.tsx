@@ -12,6 +12,7 @@ import {
   useParams,
   useSearchParams,
   useLocation,
+  useRouteError,
   redirect,
 } from "react-router";
 import { getOpcos } from "~/lib/contentful/get-opcos";
@@ -20,7 +21,10 @@ import { getOpcoMessages } from "~/lib/contentful/get-opco-messages";
 import { getOpcoPartnerMessages } from "~/lib/contentful/get-opco-partner-messages";
 import { getOpcoPages } from "~/lib/contentful/get-opco-pages";
 import { getOpcoPartnerEmails } from "~/lib/contentful/get-opco-partner-emails";
-import { getContentfulManagementClient } from "~/lib/contentful";
+import {
+  getContentfulManagementClient,
+  clearContentfulManagementClient,
+} from "~/lib/contentful";
 import {
   withCache,
   clearCache,
@@ -54,19 +58,39 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const url = new URL(request.url);
 
   const client = getContentfulManagementClient();
-  const [opcos, locales, currentUser, spaceObj] = await Promise.all([
-    getOpcos(),
-    getLocales(),
-    getCurrentUser(),
-    withCache(`space:${spaceId}`, () => client.getSpace(spaceId)),
-  ]);
+
+  let opcos: any, locales: any, currentUser: any, spaceObj: any;
+  try {
+    [opcos, locales, currentUser, spaceObj] = await Promise.all([
+      getOpcos(),
+      getLocales(),
+      getCurrentUser(),
+      withCache(`space:${spaceId}`, () => client.getSpace(spaceId)),
+    ]);
+  } catch (e: any) {
+    const status = e?.sys?.status ?? e?.status ?? e?.response?.status;
+    const msg = e?.message ?? e?.sys?.id ?? "Unknown error";
+    if (status === 401 || status === 403) {
+      throw new Error(
+        `Authentication failed (${status}): ${msg}. Your token may be invalid or expired.`,
+      );
+    }
+    throw new Error(`Failed to connect to Contentful: ${msg}`);
+  }
+
   const spaceName = spaceObj.name;
-  const [envObj, environmentsList] = await Promise.all([
-    withCache(`env:${spaceId}:${environment}`, () =>
-      spaceObj.getEnvironment(environment),
-    ),
-    withCache(`environments:${spaceId}`, () => spaceObj.getEnvironments()),
-  ]);
+  let envObj: any, environmentsList: any;
+  try {
+    [envObj, environmentsList] = await Promise.all([
+      withCache(`env:${spaceId}:${environment}`, () =>
+        spaceObj.getEnvironment(environment),
+      ),
+      withCache(`environments:${spaceId}`, () => spaceObj.getEnvironments()),
+    ]);
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    throw new Error(`Failed to load environment "${environment}": ${msg}`);
+  }
   const environmentName = envObj.name;
   const environments = environmentsList.items.map((e: any) => ({
     id: e.sys.id,
@@ -82,7 +106,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     opco.fields["title"]?.[firstLocale] ??
     "";
 
-  const baOpco = opcos.items.find((o) =>
+  const baOpco = opcos.items.find((o: any) =>
     getOpcoName(o).toLowerCase().includes("british airways"),
   );
   const defaultOpcoId = baOpco
@@ -94,7 +118,14 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     localStorage.getItem("selectedOpco") ??
     defaultOpcoId;
 
-  const opcoPartners = await getOpcoPartners(opcoId);
+  let opcoPartners: any;
+  try {
+    opcoPartners = await getOpcoPartners(opcoId);
+  } catch (e: any) {
+    throw new Error(
+      `Failed to load partners for OPCO "${opcoId}": ${e?.message ?? e}`,
+    );
+  }
 
   const firstPartnerId =
     opcoPartners.items[0]?.fields["id"]?.[firstLocale] ??
@@ -109,19 +140,23 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   localStorage.setItem("selectedOpco", opcoId);
   localStorage.setItem("selectedPartner", partnerId);
 
-  const [
-    opcoPages,
-    opcoMessages,
-    partnerPages,
-    partnerMessages,
-    partnerEmails,
-  ] = await Promise.all([
-    getOpcoPages(opcoId),
-    getOpcoMessages(opcoId),
-    getOpcoPartnerPages(opcoId, partnerId),
-    getOpcoPartnerMessages(opcoId, partnerId),
-    getOpcoPartnerEmails(opcoId, partnerId),
-  ]);
+  let opcoPages: any,
+    opcoMessages: any,
+    partnerPages: any,
+    partnerMessages: any,
+    partnerEmails: any;
+  try {
+    [opcoPages, opcoMessages, partnerPages, partnerMessages, partnerEmails] =
+      await Promise.all([
+        getOpcoPages(opcoId),
+        getOpcoMessages(opcoId),
+        getOpcoPartnerPages(opcoId, partnerId),
+        getOpcoPartnerMessages(opcoId, partnerId),
+        getOpcoPartnerEmails(opcoId, partnerId),
+      ]);
+  } catch (e: any) {
+    throw new Error(`Failed to load content entries: ${e?.message ?? e}`);
+  }
 
   const STRUCTURAL_CTS = ["opco", "partner"];
   const opcoRootCTIds = [
@@ -211,6 +246,73 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     localizableContentTypes,
     cacheLastUpdated: getCacheLastUpdated(),
   };
+}
+
+// ── Error boundary ────────────────────────────────────────────────────────────
+
+export function ErrorBoundary() {
+  const error = useRouteError() as any;
+  const navigate = useNavigate();
+
+  const message =
+    error?.message ??
+    error?.data ??
+    (typeof error === "string" ? error : "An unexpected error occurred.");
+
+  // Clear all auth credentials immediately whenever this boundary renders.
+  useEffect(() => {
+    localStorage.removeItem("contentfulManagementToken");
+    localStorage.removeItem("contentfulSpaceId");
+    localStorage.removeItem("contentfulEnvironment");
+    localStorage.removeItem("selectedOpco");
+    localStorage.removeItem("selectedPartner");
+    clearContentfulManagementClient();
+  }, []);
+
+  return (
+    <div className="h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-lg bg-white rounded-2xl border border-red-100 shadow-sm overflow-hidden">
+        {/* Red header strip */}
+        <div className="bg-red-50 border-b border-red-100 px-6 py-5 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+            <svg
+              className="w-5 h-5 text-red-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+              />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-red-700">Loading failed</p>
+            <p className="text-xs text-red-500 mt-0.5">
+              Your credentials have been cleared.
+            </p>
+          </div>
+        </div>
+
+        {/* Error detail */}
+        <div className="px-6 py-5 flex flex-col gap-5">
+          <p className="text-sm text-gray-700 leading-relaxed wrap-break-word">
+            {message}
+          </p>
+
+          <button
+            onClick={() => navigate("/login", { replace: true })}
+            className="w-full rounded-lg bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white text-sm font-semibold py-3 transition-colors"
+          >
+            Sign in again
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function HomeLayout({ loaderData }: Route.ComponentProps) {
@@ -408,7 +510,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
 
         {/* Main content */}
         {isLoading ? (
-          <main className="flex-1 overflow-y-auto p-8 bg-gray-50">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
             <div
               style={{
                 animation: "skeleton-shimmer 1.4s ease-in-out infinite",

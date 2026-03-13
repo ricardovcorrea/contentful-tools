@@ -1476,6 +1476,11 @@ export default function OverviewPage() {
   // allRenderedKeys mirrors initialRenderedKeys (computed before state, used by expand/collapse all)
   const allRenderedKeys = initialRenderedKeys;
 
+  // When a group slug is active in the URL, scope the unpublished tab to that group only
+  const filteredUnpublishedItems = group
+    ? unpublishedItems.filter((u) => u.group === `${u.scope}-${group}`)
+    : unpublishedItems;
+
   const totalEntries =
     groups.reduce((acc, g) => acc + g.items.length, 0) +
     (showPartnerInOpco
@@ -1619,7 +1624,7 @@ export default function OverviewPage() {
             }`}
           >
             Unpublished
-            {unpublishedItems.length > 0 && (
+            {filteredUnpublishedItems.length > 0 && (
               <span
                 className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === "unpublished"
@@ -1627,7 +1632,7 @@ export default function OverviewPage() {
                     : "bg-gray-200 text-gray-500"
                 }`}
               >
-                {unpublishedItems.length}
+                {filteredUnpublishedItems.length}
               </span>
             )}
           </button>
@@ -1747,7 +1752,7 @@ export default function OverviewPage() {
 
         {activeTab === "unpublished" && (
           <>
-            {unpublishedItems.length === 0 ? (
+            {filteredUnpublishedItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
                 <svg
                   className="w-10 h-10"
@@ -1769,7 +1774,7 @@ export default function OverviewPage() {
               </div>
             ) : (
               (() => {
-                const selectableIds = unpublishedItems
+                const selectableIds = filteredUnpublishedItems
                   .filter(
                     ({ item }) =>
                       publishingEntries[item.sys.id] !== "done" &&
@@ -1833,7 +1838,7 @@ export default function OverviewPage() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      {unpublishedItems.map(
+                      {filteredUnpublishedItems.map(
                         ({ item, scope, groupLabel, status }) => {
                           const name =
                             item.fields?.["internalName"]?.[firstLocale] ??

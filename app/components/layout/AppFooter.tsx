@@ -16,9 +16,9 @@ export function AppFooter({
   cacheTtlMs,
 }: Props) {
   return (
-    <footer className="h-15 shrink-0 bg-gray-50 border-t border-gray-200/70 px-8 flex items-center justify-between gap-6">
+    <footer className="shrink-0 bg-gray-50 border-t border-gray-200/70 px-3 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 min-h-10">
       <span
-        className="flex items-center gap-1.5 text-xs font-mono text-gray-400 tracking-tight select-all"
+        className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-gray-400 tracking-tight select-all"
         title="Contentful Management API token"
       >
         <span className="font-sans font-semibold text-gray-400 not-italic">
@@ -26,11 +26,11 @@ export function AppFooter({
         </span>
         {maskedToken}
       </span>
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 sm:gap-6 ml-auto">
         {cacheLastUpdated && (
           <span className="text-xs text-gray-700 tabular-nums tracking-tight">
             Cache updated {formatCacheTime(cacheLastUpdated)}
-            <span className="ml-1.5 text-gray-400">
+            <span className="ml-1.5 text-gray-400 hidden sm:inline">
               · {cacheTtlMs / 60_000} min TTL
             </span>
           </span>
