@@ -160,8 +160,11 @@ function Toaster({
     <div
       role="region"
       aria-label="Notifications"
-      className="fixed top-24 right-4 z-50 flex flex-col gap-2.5 pointer-events-none"
-      style={{ maxWidth: "min(26rem, calc(100vw - 2rem))" }}
+      className="fixed top-24 z-50 flex flex-col gap-2.5 pointer-events-none"
+      style={{
+        maxWidth: "min(26rem, calc(100vw - 2rem))",
+        right: "max(1rem, calc((100vw - 1920px) / 2 + 1rem))",
+      }}
     >
       {toasts.map((toast) => {
         const { bg, border, bar, icon, title, msg } =

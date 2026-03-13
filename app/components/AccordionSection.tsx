@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 
 export function AccordionSection({
@@ -7,6 +7,8 @@ export function AccordionSection({
   children,
   defaultOpen = false,
   forceOpen,
+  expandKey,
+  collapseKey,
   icon,
 }: {
   label: string;
@@ -14,9 +16,20 @@ export function AccordionSection({
   children: ReactNode;
   defaultOpen?: boolean;
   forceOpen?: boolean;
+  expandKey?: number;
+  collapseKey?: number;
   icon?: ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    if (expandKey) setIsOpen(true);
+  }, [expandKey]);
+
+  useEffect(() => {
+    if (collapseKey) setIsOpen(false);
+  }, [collapseKey]);
+
   const open = forceOpen || isOpen;
 
   return (

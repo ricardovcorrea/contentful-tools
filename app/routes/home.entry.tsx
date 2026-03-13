@@ -672,11 +672,21 @@ function EditableCell({
     return (
       <div className="flex flex-col gap-1.5">
         <textarea
-          className="w-full min-h-9 text-sm px-2 py-1.5 border border-blue-400 rounded bg-white text-gray-800 resize-y focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="w-full min-h-9 text-sm px-2 py-1.5 border border-blue-400 rounded bg-white text-gray-800 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-300"
           value={draftValue}
           autoFocus
-          rows={Math.max(2, (draftValue.match(/\n/g) ?? []).length + 1)}
+          ref={(el) => {
+            if (el) {
+              el.style.height = "auto";
+              el.style.height = el.scrollHeight + "px";
+            }
+          }}
           onChange={(e) => setDraftValue(e.target.value)}
+          onInput={(e) => {
+            const t = e.currentTarget;
+            t.style.height = "auto";
+            t.style.height = t.scrollHeight + "px";
+          }}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
               e.preventDefault();

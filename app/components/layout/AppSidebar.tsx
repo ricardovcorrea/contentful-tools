@@ -19,6 +19,7 @@ interface Props {
   opcoMessages: EntryCollection;
   opcoRefGroups: RefGroup[];
   opcoHasLocalizable: boolean;
+  opcoHasMissingTranslations: boolean;
   opcoExpanded: boolean;
   onOpcoToggle: () => void;
   // Partner
@@ -30,6 +31,7 @@ interface Props {
   partnerEmails: EntryCollection;
   partnerRefGroups: RefGroup[];
   partnerHasLocalizable: boolean;
+  partnerHasMissingTranslations: boolean;
   partnerExpanded: boolean;
   onPartnerToggle: () => void;
   // Navigation
@@ -41,6 +43,8 @@ interface Props {
   isLocalizable: (items: any[]) => boolean;
   // Reset signal — increment to collapse all sections
   resetKey?: number;
+  // Per content-type-group missing translation flags
+  groupMissingMap?: Record<string, boolean>;
 }
 
 function getName(fields: Record<string, any>, locale: string) {
@@ -61,6 +65,7 @@ export function AppSidebar({
   opcoMessages,
   opcoRefGroups,
   opcoHasLocalizable,
+  opcoHasMissingTranslations,
   opcoExpanded,
   onOpcoToggle,
   opcoPartners,
@@ -71,6 +76,7 @@ export function AppSidebar({
   partnerEmails,
   partnerRefGroups,
   partnerHasLocalizable,
+  partnerHasMissingTranslations,
   partnerExpanded,
   onPartnerToggle,
   entryId,
@@ -79,6 +85,7 @@ export function AppSidebar({
   onGoToEntry,
   isLocalizable,
   resetKey,
+  groupMissingMap = {},
 }: Props) {
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 1024,
@@ -92,6 +99,8 @@ export function AppSidebar({
   const [translationsExpanded, setTranslationsExpanded] =
     useState<boolean>(false);
   const [contentExpanded, setContentExpanded] = useState<boolean>(false);
+  const [accordionExpandKey, setAccordionExpandKey] = useState(0);
+  const [accordionCollapseKey, setAccordionCollapseKey] = useState(0);
 
   const localeActive = pathname.startsWith("/locales/");
 
@@ -296,12 +305,15 @@ export function AppSidebar({
                       setTranslationsExpanded(true);
                       onNavigate("/overview/opco");
                     }}
-                    className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
                       pathname.startsWith("/overview/opco")
                         ? "bg-violet-500/20 text-violet-700"
                         : "text-gray-500 hover:bg-indigo-500/10 hover:text-indigo-600"
                     }`}
                   >
+                    {opcoHasMissingTranslations && (
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    )}
                     <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-[8px] font-extrabold uppercase tracking-tight leading-none">
                       OPC
                     </span>
@@ -317,12 +329,15 @@ export function AppSidebar({
                       setTranslationsExpanded(true);
                       onNavigate("/overview/partner");
                     }}
-                    className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
                       pathname.startsWith("/overview/partner")
                         ? "bg-emerald-500/20 text-emerald-700"
                         : "text-gray-500 hover:bg-indigo-500/10 hover:text-indigo-600"
                     }`}
                   >
+                    {partnerHasMissingTranslations && (
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    )}
                     <svg
                       className="w-3.5 h-3.5 shrink-0"
                       fill="none"
@@ -446,6 +461,7 @@ export function AppSidebar({
                   setContentExpanded(false);
                   if (opcoExpanded) onOpcoToggle();
                   if (partnerExpanded) onPartnerToggle();
+                  setAccordionCollapseKey((k) => k + 1);
                 }}
                 title="Collapse all sections"
                 className="flex items-center justify-center w-6 h-6 rounded border border-transparent text-gray-300 hover:border-gray-300/60 hover:bg-gray-50 hover:text-gray-500 transition-all"
@@ -472,6 +488,7 @@ export function AppSidebar({
                   setContentExpanded(true);
                   if (!opcoExpanded) onOpcoToggle();
                   if (!partnerExpanded) onPartnerToggle();
+                  setAccordionExpandKey((k) => k + 1);
                 }}
                 title="Expand all sections"
                 className="flex items-center justify-center w-6 h-6 rounded border border-transparent text-gray-300 hover:border-gray-300/60 hover:bg-gray-50 hover:text-gray-500 transition-all"
@@ -797,9 +814,18 @@ export function AppSidebar({
                           OPC
                         </span>
                       </div>
-                      <span className="text-xs font-semibold text-gray-600">
+                      <span className="text-xs font-semibold text-gray-600 flex-1">
                         OPCO
                       </span>
+                      {opcoHasMissingTranslations && (
+                        <span
+                          title="Has missing translations"
+                          className="shrink-0 flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-300/60 px-1.5 py-0.5 rounded-full leading-none"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          Missing
+                        </span>
+                      )}
                     </button>
                   )}
 
@@ -828,9 +854,18 @@ export function AppSidebar({
                           />
                         </svg>
                       </div>
-                      <span className="text-xs font-semibold text-gray-600">
+                      <span className="text-xs font-semibold text-gray-600 flex-1">
                         Partner
                       </span>
+                      {partnerHasMissingTranslations && (
+                        <span
+                          title="Has missing translations"
+                          className="shrink-0 flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-300/60 px-1.5 py-0.5 rounded-full leading-none"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          Missing
+                        </span>
+                      )}
                     </button>
                   )}
                 </>
@@ -930,6 +965,8 @@ export function AppSidebar({
                           <AccordionSection
                             label="Pages"
                             count={opcoPages.items.length}
+                            expandKey={accordionExpandKey}
+                            collapseKey={accordionCollapseKey}
                           >
                             {isLocalizable(opcoPages.items) && (
                               <button
@@ -957,6 +994,12 @@ export function AppSidebar({
                                 <span className="text-xs font-semibold flex-1 text-violet-700">
                                   Translation overview
                                 </span>
+                                {groupMissingMap["opco-pages"] && (
+                                  <span
+                                    title="Has missing translations"
+                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                  />
+                                )}
                                 <svg
                                   className="w-3 h-3 text-violet-400 shrink-0"
                                   fill="none"
@@ -1006,6 +1049,8 @@ export function AppSidebar({
                           <AccordionSection
                             label="Messages"
                             count={opcoMessages.items.length}
+                            expandKey={accordionExpandKey}
+                            collapseKey={accordionCollapseKey}
                           >
                             {isLocalizable(opcoMessages.items) && (
                               <button
@@ -1033,6 +1078,12 @@ export function AppSidebar({
                                 <span className="text-xs font-semibold flex-1 text-violet-700">
                                   Translation overview
                                 </span>
+                                {groupMissingMap["opco-messages"] && (
+                                  <span
+                                    title="Has missing translations"
+                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                  />
+                                )}
                                 <svg
                                   className="w-3 h-3 text-violet-400 shrink-0"
                                   fill="none"
@@ -1086,6 +1137,8 @@ export function AppSidebar({
                               key={`ref-opco-${refGroup.contentTypeId}`}
                               label={refGroup.label}
                               count={refGroup.items.length}
+                              expandKey={accordionExpandKey}
+                              collapseKey={accordionCollapseKey}
                             >
                               {isLocalizable(refGroup.items) && (
                                 <button
@@ -1113,6 +1166,12 @@ export function AppSidebar({
                                   <span className="text-xs font-semibold flex-1 text-violet-700">
                                     Translation overview
                                   </span>
+                                  {groupMissingMap[`opco-${refGroup.slug}`] && (
+                                    <span
+                                      title="Has missing translations"
+                                      className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                    />
+                                  )}
                                   <svg
                                     className="w-3 h-3 text-violet-400 shrink-0"
                                     fill="none"
@@ -1222,6 +1281,8 @@ export function AppSidebar({
                           <AccordionSection
                             label="Pages"
                             count={partnerPages.items.length}
+                            expandKey={accordionExpandKey}
+                            collapseKey={accordionCollapseKey}
                           >
                             {isLocalizable(partnerPages.items) && (
                               <button
@@ -1249,6 +1310,12 @@ export function AppSidebar({
                                 <span className="text-xs font-semibold flex-1 text-emerald-700">
                                   Translation overview
                                 </span>
+                                {groupMissingMap["partner-pages"] && (
+                                  <span
+                                    title="Has missing translations"
+                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                  />
+                                )}
                                 <svg
                                   className="w-3 h-3 text-emerald-400 shrink-0"
                                   fill="none"
@@ -1298,6 +1365,8 @@ export function AppSidebar({
                           <AccordionSection
                             label="Messages"
                             count={partnerMessages.items.length}
+                            expandKey={accordionExpandKey}
+                            collapseKey={accordionCollapseKey}
                           >
                             {isLocalizable(partnerMessages.items) && (
                               <button
@@ -1325,6 +1394,12 @@ export function AppSidebar({
                                 <span className="text-xs font-semibold flex-1 text-emerald-700">
                                   Translation overview
                                 </span>
+                                {groupMissingMap["partner-messages"] && (
+                                  <span
+                                    title="Has missing translations"
+                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                  />
+                                )}
                                 <svg
                                   className="w-3 h-3 text-emerald-400 shrink-0"
                                   fill="none"
@@ -1374,6 +1449,8 @@ export function AppSidebar({
                           <AccordionSection
                             label="Emails"
                             count={partnerEmails.items.length}
+                            expandKey={accordionExpandKey}
+                            collapseKey={accordionCollapseKey}
                           >
                             {isLocalizable(partnerEmails.items) && (
                               <button
@@ -1401,6 +1478,12 @@ export function AppSidebar({
                                 <span className="text-xs font-semibold flex-1 text-emerald-700">
                                   Translation overview
                                 </span>
+                                {groupMissingMap["partner-emails"] && (
+                                  <span
+                                    title="Has missing translations"
+                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                  />
+                                )}
                                 <svg
                                   className="w-3 h-3 text-emerald-400 shrink-0"
                                   fill="none"
@@ -1454,6 +1537,8 @@ export function AppSidebar({
                               key={`ref-partner-${refGroup.contentTypeId}`}
                               label={refGroup.label}
                               count={refGroup.items.length}
+                              expandKey={accordionExpandKey}
+                              collapseKey={accordionCollapseKey}
                             >
                               {isLocalizable(refGroup.items) && (
                                 <button
@@ -1481,6 +1566,14 @@ export function AppSidebar({
                                   <span className="text-xs font-semibold flex-1 text-emerald-700">
                                     Translation overview
                                   </span>
+                                  {groupMissingMap[
+                                    `partner-${refGroup.slug}`
+                                  ] && (
+                                    <span
+                                      title="Has missing translations"
+                                      className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                    />
+                                  )}
                                   <svg
                                     className="w-3 h-3 text-emerald-400 shrink-0"
                                     fill="none"

@@ -6,6 +6,7 @@ import { AppHeader } from "~/components/layout/AppHeader";
 import { AppSidebar } from "~/components/layout/AppSidebar";
 import { AppFooter } from "~/components/layout/AppFooter";
 import { ToastProvider } from "~/lib/toast";
+import { EditModeProvider } from "~/lib/edit-mode";
 import {
   dispatchLoadStep,
   dispatchLoadComplete,
@@ -480,10 +481,49 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     environmentId,
     environments,
     localizableContentTypes,
+    localizableFieldsMap,
+    opcoConfiguredLocaleCodes,
     cacheLastUpdated,
   } = loaderData;
 
   const firstLocale = locales.items[0]?.code ?? "en";
+
+  /** Returns true if any entry in any group has a source-locale value but
+   *  a missing value in at least one target locale. */
+  function hasAnyMissingTranslations(groups: { items: any[] }[]): boolean {
+    const targetCodes = locales.items
+      .map((l) => l.code)
+      .filter((c) => c !== firstLocale);
+    if (targetCodes.length === 0) return false;
+    for (const group of groups) {
+      for (const item of group.items) {
+        const ctId: string | undefined = item.sys?.contentType?.sys?.id;
+        const fields: string[] = (ctId && localizableFieldsMap[ctId]) || [];
+        for (const fieldId of fields) {
+          const map = item.fields[fieldId];
+          const srcVal = map?.[firstLocale];
+          if (
+            srcVal === undefined ||
+            srcVal === null ||
+            srcVal === "" ||
+            (Array.isArray(srcVal) && srcVal.length === 0)
+          )
+            continue;
+          for (const lc of targetCodes) {
+            const v = map?.[lc];
+            if (
+              v === undefined ||
+              v === null ||
+              v === "" ||
+              (Array.isArray(v) && v.length === 0)
+            )
+              return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
 
   const ctOf = (items: any[]) =>
     items[0]?.sys?.contentType?.sys?.id as string | undefined;
@@ -500,6 +540,49 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     isLocalizable(partnerMessages.items) ||
     isLocalizable(partnerEmails.items) ||
     partnerRefGroups.some((g) => isLocalizable(g.items));
+
+  const opcoHasMissingTranslations = opcoHasLocalizable
+    ? hasAnyMissingTranslations([opcoPages, opcoMessages, ...opcoRefGroups])
+    : false;
+  const partnerHasMissingTranslations = partnerHasLocalizable
+    ? hasAnyMissingTranslations([
+        partnerPages,
+        partnerMessages,
+        partnerEmails,
+        ...partnerRefGroups,
+      ])
+    : false;
+
+  // Per-group missing flag — keyed by "opco-{slug}" / "partner-{slug}"
+  const groupMissingMap: Record<string, boolean> = {
+    "opco-pages": isLocalizable(opcoPages.items)
+      ? hasAnyMissingTranslations([opcoPages])
+      : false,
+    "opco-messages": isLocalizable(opcoMessages.items)
+      ? hasAnyMissingTranslations([opcoMessages])
+      : false,
+    ...Object.fromEntries(
+      opcoRefGroups.map((g) => [
+        `opco-${g.slug}`,
+        isLocalizable(g.items) ? hasAnyMissingTranslations([g]) : false,
+      ]),
+    ),
+    "partner-pages": isLocalizable(partnerPages.items)
+      ? hasAnyMissingTranslations([partnerPages])
+      : false,
+    "partner-messages": isLocalizable(partnerMessages.items)
+      ? hasAnyMissingTranslations([partnerMessages])
+      : false,
+    "partner-emails": isLocalizable(partnerEmails.items)
+      ? hasAnyMissingTranslations([partnerEmails])
+      : false,
+    ...Object.fromEntries(
+      partnerRefGroups.map((g) => [
+        `partner-${g.slug}`,
+        isLocalizable(g.items) ? hasAnyMissingTranslations([g]) : false,
+      ]),
+    ),
+  };
 
   const navigate = useNavigate();
   const navigation = useNavigation();
@@ -623,152 +706,160 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <ToastProvider>
-      <div className="min-h-screen bg-gray-200 p-4">
-        <div className="h-[calc(100vh-2rem)] max-w-[1920px] mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
-          <AppHeader
-            spaceName={spaceName}
-            spaceId={spaceId}
-            spaceOptions={spaces.map((s) => ({ value: s.id, label: s.name }))}
-            onSpaceChange={handleSpaceChange}
-            environmentId={environmentId}
-            environments={environments}
-            currentUser={currentUser}
-            isLoading={isLoading}
-            onEnvChange={handleEnvChange}
-            opcoOptions={opcos.items.map((opco: any) => ({
-              value:
-                resolveStringField(opco.fields["id"], firstLocale) ||
-                opco.sys.id,
-              label: (resolveStringField(
-                opco.fields["internalName"],
-                firstLocale,
-              ) ||
-                resolveStringField(opco.fields["title"], firstLocale) ||
-                resolveStringField(opco.fields["id"], firstLocale) ||
-                opco.sys.id) as string,
-            }))}
-            selectedOpco={selectedOpco}
-            onOpcoChange={handleOpcoChange}
-            partnerOptions={opcoPartners.items.map((partner: any) => ({
-              value:
-                resolveStringField(partner.fields["id"], firstLocale) ||
-                partner.sys.id,
-              label: (resolveStringField(
-                partner.fields["internalName"],
-                firstLocale,
-              ) ||
-                resolveStringField(partner.fields["title"], firstLocale) ||
-                resolveStringField(partner.fields["id"], firstLocale) ||
-                partner.sys.id) as string,
-            }))}
-            selectedPartner={selectedPartner}
-            onPartnerChange={handlePartnerChange}
-          />
-
-          {/* Top progress bar */}
-          {isLoading && (
-            <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
-              <div
-                className="h-full w-1/2 bg-blue-500"
-                style={{
-                  animation: "progress-slide 1.4s ease-in-out infinite",
-                }}
-              />
-            </div>
-          )}
-
-          <div className="flex flex-1 overflow-hidden">
-            <AppSidebar
+    <EditModeProvider>
+      <ToastProvider>
+        <div className="min-h-screen bg-gray-200 p-4">
+          <div className="h-[calc(100vh-2rem)] max-w-[1920px] mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
+            <AppHeader
+              spaceName={spaceName}
+              spaceId={spaceId}
+              spaceOptions={spaces.map((s) => ({ value: s.id, label: s.name }))}
+              onSpaceChange={handleSpaceChange}
+              environmentId={environmentId}
+              environments={environments}
+              currentUser={currentUser}
               isLoading={isLoading}
-              firstLocale={firstLocale}
-              locales={allLocales}
-              opcos={opcos}
+              onEnvChange={handleEnvChange}
+              opcoOptions={opcos.items.map((opco: any) => ({
+                value:
+                  resolveStringField(opco.fields["id"], firstLocale) ||
+                  opco.sys.id,
+                label: (resolveStringField(
+                  opco.fields["internalName"],
+                  firstLocale,
+                ) ||
+                  resolveStringField(opco.fields["title"], firstLocale) ||
+                  resolveStringField(opco.fields["id"], firstLocale) ||
+                  opco.sys.id) as string,
+              }))}
               selectedOpco={selectedOpco}
-              opcoEntrySysId={opcoEntrySysId}
-              opcoPages={opcoPages}
-              opcoMessages={opcoMessages}
-              opcoRefGroups={opcoRefGroups}
-              opcoHasLocalizable={opcoHasLocalizable}
-              opcoExpanded={opcoExpanded}
-              onOpcoToggle={() => setOpcoExpanded((p) => !p)}
-              opcoPartners={opcoPartners}
+              onOpcoChange={handleOpcoChange}
+              partnerOptions={opcoPartners.items.map((partner: any) => ({
+                value:
+                  resolveStringField(partner.fields["id"], firstLocale) ||
+                  partner.sys.id,
+                label: (resolveStringField(
+                  partner.fields["internalName"],
+                  firstLocale,
+                ) ||
+                  resolveStringField(partner.fields["title"], firstLocale) ||
+                  resolveStringField(partner.fields["id"], firstLocale) ||
+                  partner.sys.id) as string,
+              }))}
               selectedPartner={selectedPartner}
-              partnerEntrySysId={partnerEntrySysId}
-              partnerPages={partnerPages}
-              partnerMessages={partnerMessages}
-              partnerEmails={partnerEmails}
-              partnerRefGroups={partnerRefGroups}
-              partnerHasLocalizable={partnerHasLocalizable}
-              partnerExpanded={partnerExpanded}
-              onPartnerToggle={() => setPartnerExpanded((p) => !p)}
-              entryId={entryId}
-              pathname={pathname}
-              onNavigate={handleNavigate}
-              onGoToEntry={goToEntry}
-              isLocalizable={isLocalizable}
-              resetKey={sidebarResetKey}
+              onPartnerChange={handlePartnerChange}
+              firstLocale={firstLocale}
+              opcos={opcos}
+              allPartners={opcoPartners}
             />
 
-            {/* Main content */}
-            {isLoading ? (
-              <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+            {/* Top progress bar */}
+            {isLoading && (
+              <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
                 <div
+                  className="h-full w-1/2 bg-blue-500"
                   style={{
-                    animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                    animation: "progress-slide 1.4s ease-in-out infinite",
                   }}
-                >
-                  <div className="mb-6">
-                    <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
-                    <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
-                    <div className="h-3 w-40 bg-gray-200 rounded" />
-                  </div>
-                  <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
-                    {[82, 76, 48, 52].map((w, i) => (
-                      <div
-                        key={i}
-                        className="h-4 bg-gray-200 rounded"
-                        style={{ width: w }}
-                      />
-                    ))}
-                  </div>
-                  <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
-                    <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
-                      <div className="h-3 w-24 bg-gray-300 rounded" />
-                      <div className="h-3 w-32 bg-gray-300 rounded" />
-                    </div>
-                    {Array.from({ length: 9 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
-                      >
-                        <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
-                        <div
-                          className="h-3 bg-gray-200 rounded"
-                          style={{ width: `${40 + ((i * 23) % 45)}%` }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </main>
-            ) : (
-              <Outlet />
+                />
+              </div>
             )}
-          </div>
 
-          <AppFooter
-            maskedToken={maskedToken}
-            cacheLastUpdated={cacheLastUpdated}
-            isLoading={isLoading}
-            onRefreshCache={() => {
-              clearCache();
-              navigate(0);
-            }}
-            cacheTtlMs={CACHE_TTL_MS}
-          />
+            <div className="flex flex-1 overflow-hidden">
+              <AppSidebar
+                isLoading={isLoading}
+                firstLocale={firstLocale}
+                locales={allLocales}
+                opcos={opcos}
+                selectedOpco={selectedOpco}
+                opcoEntrySysId={opcoEntrySysId}
+                opcoPages={opcoPages}
+                opcoMessages={opcoMessages}
+                opcoRefGroups={opcoRefGroups}
+                opcoHasLocalizable={opcoHasLocalizable}
+                opcoHasMissingTranslations={opcoHasMissingTranslations}
+                opcoExpanded={opcoExpanded}
+                onOpcoToggle={() => setOpcoExpanded((p) => !p)}
+                opcoPartners={opcoPartners}
+                selectedPartner={selectedPartner}
+                partnerEntrySysId={partnerEntrySysId}
+                partnerPages={partnerPages}
+                partnerMessages={partnerMessages}
+                partnerEmails={partnerEmails}
+                partnerRefGroups={partnerRefGroups}
+                partnerHasLocalizable={partnerHasLocalizable}
+                partnerHasMissingTranslations={partnerHasMissingTranslations}
+                partnerExpanded={partnerExpanded}
+                onPartnerToggle={() => setPartnerExpanded((p) => !p)}
+                entryId={entryId}
+                pathname={pathname}
+                onNavigate={handleNavigate}
+                onGoToEntry={goToEntry}
+                isLocalizable={isLocalizable}
+                resetKey={sidebarResetKey}
+                groupMissingMap={groupMissingMap}
+              />
+
+              {/* Main content */}
+              {isLoading ? (
+                <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+                  <div
+                    style={{
+                      animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                    }}
+                  >
+                    <div className="mb-6">
+                      <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
+                      <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
+                      <div className="h-3 w-40 bg-gray-200 rounded" />
+                    </div>
+                    <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
+                      {[82, 76, 48, 52].map((w, i) => (
+                        <div
+                          key={i}
+                          className="h-4 bg-gray-200 rounded"
+                          style={{ width: w }}
+                        />
+                      ))}
+                    </div>
+                    <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
+                      <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
+                        <div className="h-3 w-24 bg-gray-300 rounded" />
+                        <div className="h-3 w-32 bg-gray-300 rounded" />
+                      </div>
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
+                        >
+                          <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
+                          <div
+                            className="h-3 bg-gray-200 rounded"
+                            style={{ width: `${40 + ((i * 23) % 45)}%` }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </main>
+              ) : (
+                <Outlet />
+              )}
+            </div>
+
+            <AppFooter
+              maskedToken={maskedToken}
+              cacheLastUpdated={cacheLastUpdated}
+              isLoading={isLoading}
+              onRefreshCache={() => {
+                clearCache();
+                navigate(0);
+              }}
+              cacheTtlMs={CACHE_TTL_MS}
+            />
+          </div>
         </div>
-      </div>
-    </ToastProvider>
+      </ToastProvider>
+    </EditModeProvider>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouteLoaderData, useNavigate } from "react-router";
 import { useToast } from "~/lib/toast";
+import { useEditMode } from "~/lib/edit-mode";
 import { getContentType } from "~/lib/contentful/get-content-type";
 import { getAsset } from "~/lib/contentful/get-asset";
 import { getEntry, invalidateEntry } from "~/lib/contentful/get-entry";
@@ -447,6 +448,8 @@ function GroupTable({
   const { fields: localizableFields, loading } =
     useLocalizableFields(contentTypeId);
 
+  const { editMode } = useEditMode();
+
   // ── Inline edit state ──────────────────────────────────────────────
   const [localEdits, setLocalEdits] = useState<Record<string, unknown>>({});
   const [editingCell, setEditingCell] = useState<string | null>(null);
@@ -762,9 +765,14 @@ function GroupTable({
                                   className={`px-4 py-2 align-top border-l border-gray-300/60 ${topBorder} ${isLastField ? "pb-3" : ""}`}
                                 >
                                   <button
-                                    disabled={isSaving || lc === firstLocale}
+                                    disabled={
+                                      isSaving ||
+                                      lc === firstLocale ||
+                                      !editMode
+                                    }
                                     onClick={() =>
                                       lc !== firstLocale &&
+                                      editMode &&
                                       handleSaveInline(
                                         item.sys.id,
                                         fieldId,
@@ -772,11 +780,13 @@ function GroupTable({
                                         !boolVal,
                                       )
                                     }
-                                    className={`flex items-center gap-1.5 py-0.5 rounded transition-opacity ${lc === firstLocale ? "cursor-default opacity-60" : "cursor-pointer hover:opacity-80"} ${isSaving ? "opacity-40" : ""}`}
+                                    className={`flex items-center gap-1.5 py-0.5 rounded transition-opacity ${lc === firstLocale ? "cursor-default opacity-60" : editMode ? "cursor-pointer hover:opacity-80" : "cursor-not-allowed opacity-50"} ${isSaving ? "opacity-40" : ""}`}
                                     title={
                                       lc === firstLocale
                                         ? "Source locale"
-                                        : `Click to toggle ${fieldId} / ${lc}`
+                                        : !editMode
+                                          ? "Enable Edit mode to make changes"
+                                          : `Click to toggle ${fieldId} / ${lc}`
                                     }
                                   >
                                     <div
@@ -855,11 +865,22 @@ function GroupTable({
                                 >
                                   <textarea
                                     autoFocus
-                                    rows={3}
                                     value={editingValue}
+                                    ref={(el) => {
+                                      if (el) {
+                                        el.style.height = "auto";
+                                        el.style.height =
+                                          el.scrollHeight + "px";
+                                      }
+                                    }}
                                     onChange={(e) =>
                                       setEditingValue(e.target.value)
                                     }
+                                    onInput={(e) => {
+                                      const t = e.currentTarget;
+                                      t.style.height = "auto";
+                                      t.style.height = t.scrollHeight + "px";
+                                    }}
                                     onKeyDown={(e) => {
                                       if (e.key === "Escape") {
                                         setEditingCell(null);
@@ -877,7 +898,7 @@ function GroupTable({
                                         );
                                       }
                                     }}
-                                    className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 resize-y font-sans text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 resize-none overflow-hidden font-sans text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     placeholder={`Translation for ${lc}…`}
                                   />
                                   {cellError && (
@@ -1734,13 +1755,42 @@ export default function OverviewPage() {
 
   return (
     <main className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-8 pt-4">
-        <div className="flex items-center gap-3">
-          <span
-            className={`w-2 h-2 rounded-full shrink-0 ${isOpco ? "bg-violet-500" : "bg-emerald-500"}`}
-          />
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-8 pt-5">
+        <div className="flex items-center gap-4">
+          <div
+            className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center border ${isOpco ? "bg-violet-500/10 border-violet-300" : "bg-emerald-500/10 border-emerald-300"}`}
+          >
+            <svg
+              className={`w-4 h-4 ${isOpco ? "text-violet-600" : "text-emerald-600"}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              {isOpco ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              )}
+            </svg>
+          </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">{pageTitle}</h2>
+            <p
+              className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${isOpco ? "text-violet-500" : "text-emerald-500"}`}
+            >
+              {isOpco ? "OPCO" : "Partner"} · Translation Overview
+            </p>
+            <h2 className="text-2xl font-bold text-gray-900 leading-tight">
+              {pageTitle.replace(/^(OPCO|Partner) — /, "")}
+            </h2>
             <p className="text-sm text-gray-500 mt-0.5">
               {scopeLabel} · {totalEntries} entries · {localeCodes.length}{" "}
               locales · only localizable fields shown
