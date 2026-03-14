@@ -137,6 +137,7 @@ export function AppHeader({
               onChange={onOpcoChange}
               disabled={isLoading}
               theme="violet"
+              onCreate={() => openCreateNew("opco")}
             />
             <div className="w-px h-7 bg-gray-200" />
             <HeaderPicker
@@ -146,42 +147,8 @@ export function AppHeader({
               onChange={onPartnerChange}
               disabled={isLoading}
               theme="emerald"
-              onCreateFirst={
-                editMode && partnerOptions.length === 0
-                  ? () => openCreateNew("partner")
-                  : undefined
-              }
+              onCreate={() => openCreateNew("partner")}
             />
-            <div className="w-px h-7 bg-gray-200" />
-            <button
-              onClick={() => editMode && openCreateNew()}
-              disabled={!editMode}
-              title={
-                editMode
-                  ? "Create a new OPCO or partner"
-                  : "Enable Edit mode to create entries"
-              }
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-xs font-semibold transition-all ${
-                editMode
-                  ? "border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 cursor-pointer"
-                  : "border-gray-200 text-gray-300 cursor-not-allowed opacity-50"
-              }`}
-            >
-              <svg
-                className="w-3.5 h-3.5 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              <span className="hidden xl:inline">Create new</span>
-            </button>
           </div>
         </div>
 

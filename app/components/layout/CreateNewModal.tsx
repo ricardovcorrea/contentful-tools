@@ -414,16 +414,16 @@ function deriveInternalName(newName: string): string {
 
 /**
  * Derive a partner ID slug from a display name:
- * lowercased, spaces → hyphens, non-slug chars stripped.
- * e.g. "British Airways" → "british-airways"
+ * lowercased, spaces → underscores, non-slug chars stripped.
+ * e.g. "British Airways" → "british_airways"
  */
 function derivePartnerId(name: string): string {
   return name
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9_-]/g, "")
-    .replace(/-{2,}/g, "-");
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/_{2,}/g, "_");
 }
 
 function derivePartnerInternalName(newName: string): string {
@@ -611,11 +611,11 @@ function Step4PartnerDetails({
   onChangeName: (v: string) => void;
 }) {
   const idTrimmed = newPartnerId.trim();
-  const idFormatOk = /^[a-z0-9][a-z0-9_-]*$/.test(idTrimmed);
+  const idFormatOk = /^[a-z0-9][a-z0-9_]*$/.test(idTrimmed);
   const idUnique = !existingPartnerIds.includes(idTrimmed);
   const idError =
     idTrimmed.length > 0 && !idFormatOk
-      ? "Lowercase letters, numbers and hyphens only. Must start with a letter or number."
+      ? "Lowercase letters, numbers and underscores only. Must start with a letter or number."
       : idTrimmed.length > 0 && !idUnique
         ? "This ID already exists — choose a different one."
         : null;
@@ -663,9 +663,9 @@ function Step4PartnerDetails({
           <span className="text-red-500 ml-0.5">*</span>
         </label>
         <p className="text-[11px] text-gray-400 -mt-0.5">
-          Unique slug — auto-derived from the name (lowercase, spaces become
-          hyphens, e.g. <span className="font-mono">British Airways</span> →{" "}
-          <span className="font-mono">british-airways</span>). Edit freely.
+          Unique ID — auto-derived from the name (lowercase, spaces become
+          underscores, e.g. <span className="font-mono">British Airways</span> →{" "}
+          <span className="font-mono">british_airways</span>). Edit freely.
         </p>
         <div className="relative">
           <input
@@ -674,12 +674,12 @@ function Step4PartnerDetails({
             onChange={(e) => {
               const sanitised = e.target.value
                 .toLowerCase()
-                .replace(/\s+/g, "-")
-                .replace(/[^a-z0-9_-]/g, "")
-                .replace(/-{2,}/g, "-");
+                .replace(/\s+/g, "_")
+                .replace(/[^a-z0-9_]/g, "")
+                .replace(/_{2,}/g, "_");
               onChangeId(sanitised);
             }}
-            placeholder="e.g. british-airways"
+            placeholder="e.g. british_airways"
             className={`w-full px-3 py-2 rounded-lg border text-sm font-mono focus:outline-none focus:ring-2 transition-colors ${
               idError
                 ? "border-red-300 bg-red-50 focus:ring-red-200"
@@ -1460,7 +1460,7 @@ export function CreateNewModal({
   const partnerDetailsValid =
     newPartnerDisplayName.trim().length > 0 &&
     newPartnerId.trim().length > 0 &&
-    /^[a-z0-9][a-z0-9_-]*$/.test(newPartnerId.trim()) &&
+    /^[a-z0-9][a-z0-9_]*$/.test(newPartnerId.trim()) &&
     !existingPartnerIds.includes(newPartnerId.trim()) &&
     newPartnerName.trim().length > 0;
 

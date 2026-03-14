@@ -14,6 +14,7 @@ export function HeaderPicker({
   onChange,
   disabled,
   onCreateFirst,
+  onCreate,
 }: {
   label: string;
   value: string;
@@ -21,13 +22,14 @@ export function HeaderPicker({
   onChange: (v: string) => void;
   disabled?: boolean;
   theme?: string; // accepted but ignored — kept for call-site compatibility
-  onCreateFirst?: () => void;
+  onCreateFirst?: () => void; // kept for backward compat, maps to onCreate
+  onCreate?: () => void;
 }) {
+  const createHandler = onCreate ?? onCreateFirst;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const isEmpty = options.length === 0;
-  const canSwitch =
-    (options.length > 1 || (isEmpty && !!onCreateFirst)) && !disabled;
+  const canSwitch = (options.length > 1 || !!createHandler) && !disabled;
 
   useEffect(() => {
     if (!open) return;
@@ -88,7 +90,7 @@ export function HeaderPicker({
             {label}
           </p>
           <p className="text-xs font-semibold truncate leading-tight text-gray-700">
-            {isEmpty ? "No partners" : (selected?.label ?? value)}
+            {isEmpty ? `No ${label.toLowerCase()}` : (selected?.label ?? value)}
           </p>
         </div>
         {canSwitch && (
@@ -158,11 +160,11 @@ export function HeaderPicker({
               );
             })}
           </div>
-          {onCreateFirst && (
+          {createHandler && (
             <div className="border-t border-gray-100">
               <button
                 onClick={() => {
-                  onCreateFirst();
+                  createHandler();
                   setOpen(false);
                 }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
@@ -183,7 +185,9 @@ export function HeaderPicker({
                   </svg>
                 </span>
                 <span className="flex-1 text-sm font-medium">
-                  Create first partner
+                  {isEmpty
+                    ? `Create first ${label.toLowerCase()}`
+                    : `Create new ${label.toLowerCase()}`}
                 </span>
               </button>
             </div>
