@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 export const LOAD_STEP_EVENT = "cf:load-step";
+export const LOAD_DETAIL_EVENT = "cf:load-detail";
 
 const LOAD_STEPS = [
   "Verifying credentials",
@@ -27,15 +28,35 @@ export function dispatchLoadComplete() {
   }
 }
 
+/**
+ * Dispatch a granular detail message for the current step.
+ * Pass an array of strings to show an animated item list, or a single string
+ * for a simple subtitle.
+ */
+export function dispatchLoadDetail(items: string | string[]) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(LOAD_DETAIL_EVENT, {
+        detail: Array.isArray(items) ? items : [items],
+      }),
+    );
+  }
+}
+
 export function LoadingScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [done, setDone] = useState<Set<number>>(() => new Set());
   const [elapsed, setElapsed] = useState(0);
+  // Per-step detail items, keyed by step index
+  const [stepDetails, setStepDetails] = useState<Record<number, string[]>>({});
   const startRef = useRef(Date.now());
+  // Track which step was active when each detail arrived
+  const stepIndexRef = useRef(0);
 
   useEffect(() => {
     function onStep(e: Event) {
       const step = (e as CustomEvent<number>).detail;
+      stepIndexRef.current = step;
       setStepIndex(step);
       setDone((prev) => {
         const next = new Set(prev);
@@ -43,8 +64,17 @@ export function LoadingScreen() {
         return next;
       });
     }
+    function onDetail(e: Event) {
+      const items = (e as CustomEvent<string[]>).detail;
+      const idx = stepIndexRef.current;
+      setStepDetails((prev) => ({ ...prev, [idx]: items }));
+    }
     window.addEventListener(LOAD_STEP_EVENT, onStep);
-    return () => window.removeEventListener(LOAD_STEP_EVENT, onStep);
+    window.addEventListener(LOAD_DETAIL_EVENT, onDetail);
+    return () => {
+      window.removeEventListener(LOAD_STEP_EVENT, onStep);
+      window.removeEventListener(LOAD_DETAIL_EVENT, onDetail);
+    };
   }, []);
 
   useEffect(() => {
@@ -125,10 +155,11 @@ export function LoadingScreen() {
               {LOAD_STEPS.map((label, i) => {
                 const isDone = done.has(i);
                 const isActive = i === stepIndex;
+                const details = stepDetails[i] ?? [];
                 return (
-                  <div key={i} className="flex items-center gap-3">
+                  <div key={i} className="flex items-start gap-3">
                     {/* State icon */}
-                    <div className="shrink-0 w-5 h-5 flex items-center justify-center">
+                    <div className="shrink-0 w-5 h-5 flex items-center justify-center mt-0.5">
                       {isDone ? (
                         <svg
                           className="w-4 h-4 text-emerald-500"
@@ -150,11 +181,17 @@ export function LoadingScreen() {
                       )}
                     </div>
 
-                    {/* Label + bar */}
+                    {/* Label + bar + details */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span
-                          className={`text-xs font-medium truncate ${isDone ? "text-gray-400" : isActive ? "text-gray-800" : "text-gray-400"}`}
+                          className={`text-xs font-medium truncate ${
+                            isDone
+                              ? "text-gray-400"
+                              : isActive
+                                ? "text-gray-800"
+                                : "text-gray-400"
+                          }`}
                         >
                           {label}
                         </span>
@@ -182,6 +219,60 @@ export function LoadingScreen() {
                           />
                         ) : null}
                       </div>
+
+                      {/* Granular detail items */}
+                      {(isActive || isDone) && details.length > 0 && (
+                        <div className="mt-1.5 flex flex-col gap-0.5">
+                          {details.map((item, di) => {
+                            const isLast = di === details.length - 1;
+                            return (
+                              <div
+                                key={di}
+                                className={`flex items-center gap-1.5 ${
+                                  isDone ? "opacity-60" : ""
+                                }`}
+                              >
+                                {isDone ? (
+                                  // Step finished — all items done
+                                  <svg
+                                    className="w-2.5 h-2.5 text-emerald-400 shrink-0"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                ) : isLast ? (
+                                  // Last item in an active step — the "tip of the spear"
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0 animate-pulse" />
+                                ) : (
+                                  // Earlier items in an active step — still pending
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0 animate-pulse"
+                                    style={{ animationDelay: `${di * 120}ms` }}
+                                  />
+                                )}
+                                <span
+                                  className={`text-[9px] font-mono truncate ${
+                                    isDone
+                                      ? "text-gray-400"
+                                      : isLast
+                                        ? "text-blue-600"
+                                        : "text-gray-400"
+                                  }`}
+                                >
+                                  {item}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

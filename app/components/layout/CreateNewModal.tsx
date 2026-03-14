@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { resolveStringField } from "~/lib/resolve-string-field";
 import { getAllPartners } from "~/lib/contentful/get-all-partners";
+import { getContentfulManagementEnvironment } from "~/lib/contentful";
 
 interface EntryItem {
   sys: { id: string; contentType: { sys: { id: string } } };
@@ -10,11 +11,13 @@ interface EntryItem {
 interface Props {
   open: boolean;
   onClose: () => void;
+  onCreated?: (result: { type: "opco" | "partner"; id: string }) => void;
   firstLocale: string;
   opcos: { items: EntryItem[] };
   selectedOpco: string;
   allPartners: { items: EntryItem[] };
   selectedPartner: string;
+  initialType?: CreateType;
 }
 
 type CreateType = "opco" | "partner";
@@ -391,20 +394,40 @@ function PreviewEntryCard({ entry, expanded, onToggle }: EntryCardProps) {
 }
 // ── Step 4 — OPCO details (opco flow only) ───────────────────────────────
 
-/** Derive a slug ID from a display name */
+/**
+ * Derive an OPCO ID from a display name:
+ * - Multi-word: first letter of each word joined with "-" (e.g. "Avios UK" → "a-u")
+ * - Single word: first two characters (e.g. "Avios" → "av")
+ * Always lowercased.
+ */
 function deriveOpcoId(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  if (words.length === 1) return words[0].slice(0, 2).toLowerCase();
+  return words.map((w) => w[0].toLowerCase()).join("");
 }
 
 /** Replace the source OPCO label inside the source internal name with the new name */
 function deriveInternalName(newName: string): string {
   return newName.trim() ? `${newName} - OPCO` : "";
+}
+
+/**
+ * Derive a partner ID slug from a display name:
+ * lowercased, spaces → hyphens, non-slug chars stripped.
+ * e.g. "British Airways" → "british-airways"
+ */
+function derivePartnerId(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function derivePartnerInternalName(newName: string): string {
+  return newName.trim() ? `${newName} - Partner` : "";
 }
 
 function Step4OpcoDetails({
@@ -486,15 +509,16 @@ function Step4OpcoDetails({
           <span className="text-red-500 ml-0.5">*</span>
         </label>
         <p className="text-[11px] text-gray-400 -mt-0.5">
-          Unique slug used in Contentful field references. Lowercase letters,
-          numbers and hyphens only.
+          Unique slug — auto-derived from the name (first letter per word, e.g.{" "}
+          <span className="font-mono">Avios UK</span> →{" "}
+          <span className="font-mono">a-u</span>). Edit freely.
         </p>
         <div className="relative">
           <input
             type="text"
             value={newOpcoId}
             onChange={(e) => onChangeId(e.target.value.toLowerCase())}
-            placeholder="e.g. avios-uk"
+            placeholder="e.g. a-u"
             className={`w-full px-3 py-2 rounded-lg border text-sm font-mono focus:outline-none focus:ring-2 transition-colors ${
               idError
                 ? "border-red-300 bg-red-50 focus:ring-red-200"
@@ -567,6 +591,175 @@ function Step4OpcoDetails({
     </div>
   );
 }
+// ── Step 4 — Partner details (partner flow only) ───────────────────────
+
+function Step4PartnerDetails({
+  existingPartnerIds,
+  newPartnerDisplayName,
+  newPartnerId,
+  newPartnerName,
+  onChangeDisplayName,
+  onChangeId,
+  onChangeName,
+}: {
+  existingPartnerIds: string[];
+  newPartnerDisplayName: string;
+  newPartnerId: string;
+  newPartnerName: string;
+  onChangeDisplayName: (v: string) => void;
+  onChangeId: (v: string) => void;
+  onChangeName: (v: string) => void;
+}) {
+  const idTrimmed = newPartnerId.trim();
+  const idFormatOk = /^[a-z0-9][a-z0-9_-]*$/.test(idTrimmed);
+  const idUnique = !existingPartnerIds.includes(idTrimmed);
+  const idError =
+    idTrimmed.length > 0 && !idFormatOk
+      ? "Lowercase letters, numbers and hyphens only. Must start with a letter or number."
+      : idTrimmed.length > 0 && !idUnique
+        ? "This ID already exists — choose a different one."
+        : null;
+
+  // Auto-derive ID and internal name from display name
+  useEffect(() => {
+    if (!newPartnerDisplayName.trim()) return;
+    const derived = derivePartnerId(newPartnerDisplayName);
+    if (derived) onChangeId(derived);
+    const internal = derivePartnerInternalName(newPartnerDisplayName);
+    if (internal) onChangeName(internal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newPartnerDisplayName]);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-gray-600">
+        Set the identity fields for the new{" "}
+        <span className="font-semibold">Partner</span>.
+      </p>
+
+      {/* Display name */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold text-gray-700">
+          Partner name
+          <span className="text-red-500 ml-0.5">*</span>
+        </label>
+        <p className="text-[11px] text-gray-400 -mt-0.5">
+          Human-readable name used to derive the ID and internal name.
+        </p>
+        <input
+          type="text"
+          value={newPartnerDisplayName}
+          onChange={(e) => onChangeDisplayName(e.target.value)}
+          placeholder="e.g. British Airways"
+          className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+          autoFocus
+        />
+      </div>
+
+      {/* Derived ID */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold text-gray-700">
+          Partner ID
+          <span className="text-red-500 ml-0.5">*</span>
+        </label>
+        <p className="text-[11px] text-gray-400 -mt-0.5">
+          Unique slug — auto-derived from the name (lowercase, spaces become
+          hyphens, e.g. <span className="font-mono">British Airways</span> →{" "}
+          <span className="font-mono">british-airways</span>). Edit freely.
+        </p>
+        <div className="relative">
+          <input
+            type="text"
+            value={newPartnerId}
+            onChange={(e) => {
+              const sanitised = e.target.value
+                .toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^a-z0-9_-]/g, "")
+                .replace(/-{2,}/g, "-");
+              onChangeId(sanitised);
+            }}
+            placeholder="e.g. british-airways"
+            className={`w-full px-3 py-2 rounded-lg border text-sm font-mono focus:outline-none focus:ring-2 transition-colors ${
+              idError
+                ? "border-red-300 bg-red-50 focus:ring-red-200"
+                : idTrimmed.length > 0 && idFormatOk && idUnique
+                  ? "border-emerald-300 bg-emerald-50/40 focus:ring-emerald-200"
+                  : "border-gray-300 bg-white focus:ring-emerald-200 focus:border-emerald-400"
+            }`}
+          />
+          {idTrimmed.length > 0 && !idError && (
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-500">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </span>
+          )}
+        </div>
+        {idError && (
+          <p className="text-[11px] text-red-500 flex items-center gap-1">
+            <svg
+              className="w-3 h-3 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            {idError}
+          </p>
+        )}
+        {existingPartnerIds.length > 0 && (
+          <p className="text-[10px] text-gray-400">
+            Existing IDs: {existingPartnerIds.slice(0, 8).join(", ")}
+            {existingPartnerIds.length > 8
+              ? ` +${existingPartnerIds.length - 8} more`
+              : ""}
+          </p>
+        )}
+      </div>
+
+      {/* Internal name */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold text-gray-700">
+          Internal name
+          <span className="text-red-500 ml-0.5">*</span>
+        </label>
+        <p className="text-[11px] text-gray-400 -mt-0.5">
+          Value stored in the <span className="font-mono">internalName</span>{" "}
+          field — auto-derived as{" "}
+          <span className="font-mono">
+            {newPartnerDisplayName || "…"} - Partner
+          </span>
+          .
+        </p>
+        <input
+          type="text"
+          value={newPartnerName}
+          onChange={(e) => onChangeName(e.target.value)}
+          placeholder="e.g. British Airways - Partner"
+          className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Step 5 — preview ────────────────────────────────────────────────────
 
 function Step5Preview({
@@ -575,6 +768,9 @@ function Step5Preview({
   targetOpcoId,
   newOpcoId,
   newOpcoName,
+  newPartnerId,
+  newPartnerDisplayName,
+  newPartnerName,
   opcos,
   allCfPartners,
   firstLocale,
@@ -584,6 +780,9 @@ function Step5Preview({
   targetOpcoId: string | null;
   newOpcoId: string;
   newOpcoName: string;
+  newPartnerId: string;
+  newPartnerDisplayName: string;
+  newPartnerName: string;
   opcos: { items: EntryItem[] };
   allCfPartners: EntryItem[];
   firstLocale: string;
@@ -608,7 +807,7 @@ function Step5Preview({
 
   const ctLabel = type === "opco" ? "OPCO" : "Partner";
 
-  // For OPCO: override id and internalName with the user-supplied values
+  // Override id and internalName with user-supplied values (OPCO or partner)
   const entryForPreview: EntryItem | undefined =
     type === "opco" && sourceEntry && (newOpcoId || newOpcoName)
       ? {
@@ -621,7 +820,21 @@ function Step5Preview({
               : {}),
           },
         }
-      : sourceEntry;
+      : type === "partner" && sourceEntry && (newPartnerId || newPartnerName)
+        ? {
+            ...sourceEntry,
+            fields: {
+              ...sourceEntry.fields,
+              ...(newPartnerId ? { id: { [firstLocale]: newPartnerId } } : {}),
+              ...(newPartnerDisplayName
+                ? { name: { [firstLocale]: newPartnerDisplayName } }
+                : {}),
+              ...(newPartnerName
+                ? { internalName: { [firstLocale]: newPartnerName } }
+                : {}),
+            },
+          }
+        : sourceEntry;
 
   const entries: PreviewEntry[] = entryForPreview
     ? buildPreviewEntries([entryForPreview], firstLocale, ctLabel)
@@ -708,16 +921,275 @@ function Step5Preview({
   );
 }
 
+// ── OPCO creation progress types & view ─────────────────────────────────────
+
+type CreationStepStatus = "pending" | "running" | "success" | "error";
+
+interface CreationStepItem {
+  label: string;
+  status: CreationStepStatus;
+  detail?: string;
+}
+
+function StepIcon({ status }: { status: CreationStepStatus }) {
+  if (status === "running")
+    return (
+      <svg
+        className="w-4 h-4 text-violet-500 animate-spin shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="4"
+        />
+        <path
+          className="opacity-75"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8v8H4z"
+        />
+      </svg>
+    );
+  if (status === "success")
+    return (
+      <svg
+        className="w-4 h-4 text-emerald-500 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.5}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+    );
+  if (status === "error")
+    return (
+      <svg
+        className="w-4 h-4 text-red-500 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M6 18L18 6M6 6l12 12"
+        />
+      </svg>
+    );
+  // pending
+  return (
+    <span className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0" />
+  );
+}
+
+function CreationProgressView({
+  steps,
+  allDone,
+  hasError,
+  newEntryName,
+  entityLabel,
+  contentfulSysId,
+}: {
+  steps: CreationStepItem[];
+  allDone: boolean;
+  hasError: boolean;
+  newEntryName: string;
+  entityLabel: string;
+  contentfulSysId?: string;
+}) {
+  const spaceId =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("contentfulSpaceId") ?? "")
+      : "";
+  const envId =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("contentfulEnvironment") ?? "master")
+      : "master";
+  const contentfulUrl =
+    contentfulSysId && spaceId
+      ? `https://app.contentful.com/spaces/${spaceId}/environments/${envId}/entries/${contentfulSysId}`
+      : null;
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Status header */}
+      <div
+        className={`flex items-center gap-3 p-4 rounded-xl border ${
+          !allDone
+            ? "bg-violet-50 border-violet-200"
+            : hasError
+              ? "bg-red-50 border-red-200"
+              : "bg-emerald-50 border-emerald-200"
+        }`}
+      >
+        {!allDone ? (
+          <svg
+            className="w-5 h-5 text-violet-500 animate-spin shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
+          </svg>
+        ) : hasError ? (
+          <svg
+            className="w-5 h-5 text-red-500 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+            />
+          </svg>
+        ) : (
+          <svg
+            className="w-5 h-5 text-emerald-500 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        )}
+        <div className="min-w-0">
+          <p
+            className={`text-sm font-semibold ${
+              !allDone
+                ? "text-violet-800"
+                : hasError
+                  ? "text-red-800"
+                  : "text-emerald-800"
+            }`}
+          >
+            {!allDone
+              ? `Creating ${entityLabel} in Contentful…`
+              : hasError
+                ? "Creation failed"
+                : `${entityLabel} created successfully`}
+          </p>
+          {!allDone && (
+            <p className="text-xs text-violet-600 mt-0.5">
+              Please don&apos;t close this window.
+            </p>
+          )}
+          {allDone && !hasError && (
+            <div className="flex flex-col gap-2 mt-0.5">
+              <p className="text-xs text-emerald-600 font-mono">
+                {newEntryName}
+              </p>
+              <p className="text-[11px] text-emerald-500">
+                Reloading automatically…
+              </p>
+              {contentfulUrl && (
+                <a
+                  href={contentfulUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition-colors"
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                  See in Contentful
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Steps list */}
+      <div className="flex flex-col gap-2">
+        {steps.map((step, i) => (
+          <div
+            key={i}
+            className={`flex items-start gap-3 px-4 py-3 rounded-lg border transition-colors ${
+              step.status === "running"
+                ? "bg-violet-50 border-violet-200"
+                : step.status === "success"
+                  ? "bg-gray-50 border-gray-200"
+                  : step.status === "error"
+                    ? "bg-red-50 border-red-200"
+                    : "bg-gray-50 border-gray-100 opacity-40"
+            }`}
+          >
+            <div className="mt-0.5">
+              <StepIcon status={step.status} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p
+                className={`text-xs font-semibold ${
+                  step.status === "running"
+                    ? "text-violet-700"
+                    : step.status === "error"
+                      ? "text-red-700"
+                      : step.status === "success"
+                        ? "text-gray-700"
+                        : "text-gray-400"
+                }`}
+              >
+                {step.label}
+              </p>
+              {step.detail && (
+                <p className="text-[10px] font-mono text-gray-400 mt-0.5 truncate">
+                  {step.detail}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 
 export function CreateNewModal({
   open,
   onClose,
+  onCreated,
   firstLocale,
   opcos,
   selectedOpco,
   allPartners,
   selectedPartner,
+  initialType,
 }: Props) {
   const [step, setStep] = useState<Step>(1);
   const [createType, setCreateType] = useState<CreateType | null>(null);
@@ -726,10 +1198,22 @@ export function CreateNewModal({
   const [newOpcoId, setNewOpcoId] = useState("");
   const [newOpcoName, setNewOpcoName] = useState("");
   const [newOpcoDisplayName, setNewOpcoDisplayName] = useState("");
+  const [newPartnerId, setNewPartnerId] = useState("");
+  const [newPartnerName, setNewPartnerName] = useState("");
+  const [newPartnerDisplayName, setNewPartnerDisplayName] = useState("");
   const [allCfPartners, setAllCfPartners] = useState<EntryItem[]>(
     allPartners.items,
   );
   const [loadingPartners, setLoadingPartners] = useState(false);
+
+  // Creation progress state
+  const [creationSteps, setCreationSteps] = useState<CreationStepItem[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [creationDone, setCreationDone] = useState(false);
+  const [creationHasError, setCreationHasError] = useState(false);
+  const [newEntrySysId, setNewEntrySysId] = useState<string | undefined>(
+    undefined,
+  );
 
   // Fetch all partners across all OPCOs when partner type is selected
   useEffect(() => {
@@ -751,9 +1235,42 @@ export function CreateNewModal({
     };
   }, [createType]);
 
+  // Jump straight to the right step when opened with a pre-selected type
+  useEffect(() => {
+    if (!open || !initialType) return;
+    setCreateType(initialType);
+    if (initialType === "partner") {
+      // Always assign the currently selected OPCO — skip step 2
+      setTargetOpcoId(selectedOpco);
+      setStep(3);
+    } else {
+      setStep(3);
+    }
+  }, [open, initialType, selectedOpco]);
+
+  // Auto-close and reload once creation succeeds
+  useEffect(() => {
+    if (!creationDone || creationHasError || !createType) return;
+    const id = createType === "partner" ? newPartnerId : newOpcoId;
+    // Pre-store the selection so the clientLoader picks it up on reload
+    if (createType === "partner") {
+      localStorage.setItem("selectedPartner", id);
+    } else {
+      localStorage.setItem("selectedOpco", id);
+      localStorage.removeItem("selectedPartner");
+    }
+    const timer = setTimeout(() => {
+      handleClose();
+      onCreated?.({ type: createType, id });
+    }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creationDone, creationHasError]);
+
   if (!open) return null;
 
   const handleClose = () => {
+    if (creating) return; // block close during creation
     setStep(1);
     setCreateType(null);
     setTargetOpcoId(null);
@@ -761,12 +1278,24 @@ export function CreateNewModal({
     setNewOpcoId("");
     setNewOpcoName("");
     setNewOpcoDisplayName("");
+    setNewPartnerId("");
+    setNewPartnerName("");
+    setNewPartnerDisplayName("");
+    setCreationSteps([]);
+    setCreating(false);
+    setCreationDone(false);
+    setCreationHasError(false);
+    setNewEntrySysId(undefined);
     onClose();
   };
 
   const handleTypeSelect = (t: CreateType) => {
     setCreateType(t);
-    setStep(t === "partner" ? 2 : 3);
+    if (t === "partner") {
+      // Partner always belongs to the currently selected OPCO — skip step 2
+      setTargetOpcoId(selectedOpco);
+    }
+    setStep(3);
   };
 
   const handleTargetOpcoSelect = (id: string) => {
@@ -776,23 +1305,149 @@ export function CreateNewModal({
 
   const handleSourceSelect = (id: string) => {
     setSourceId(id);
-    // OPCO needs a details step; partner goes straight to preview
-    setStep(createType === "opco" ? 4 : 5);
+    // Both flows now go through step 4 for details
+    setStep(4);
   };
 
   const handleBack = () => {
     if (step === 2) setStep(1);
     else if (step === 3 && createType === "opco") setStep(1);
-    else if (step === 3 && createType === "partner") setStep(2);
+    else if (step === 3 && createType === "partner")
+      setStep(1); // step 2 is skipped for partners
     else if (step === 4)
-      setStep(3); // OPCO details → source
-    else if (step === 5 && createType === "opco")
-      setStep(4); // preview → details
-    else if (step === 5 && createType === "partner") setStep(3); // preview → source
+      setStep(3); // details → source (both)
+    else if (step === 5) setStep(4); // preview → details (both)
+  };
+
+  const handleCreateOpco = async () => {
+    if (!sourceId) return;
+    const sourceEntry = opcos.items.find(
+      (o) =>
+        resolveStringField(o.fields["id"], firstLocale) === sourceId ||
+        o.sys.id === sourceId,
+    );
+    if (!sourceEntry) return;
+
+    const STEPS: CreationStepItem[] = [
+      { label: "Reading source entry", status: "pending" },
+      { label: "Creating OPCO entry (draft)", status: "pending" },
+    ];
+    setCreationSteps(STEPS);
+    setCreating(true);
+    setCreationDone(false);
+    setCreationHasError(false);
+
+    const set = (i: number, patch: Partial<CreationStepItem>) =>
+      setCreationSteps((prev) =>
+        prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)),
+      );
+
+    try {
+      // Step 0 — get management environment + source entry
+      set(0, { status: "running", detail: sourceEntry.sys.id });
+      const environment = await getContentfulManagementEnvironment();
+      const fullSource = await environment.getEntry(sourceEntry.sys.id);
+      set(0, { status: "success", detail: sourceEntry.sys.id });
+
+      // Step 1 — create new entry with cloned fields (left as draft)
+      set(1, { status: "running", detail: `id: ${newOpcoId}` });
+      const newFields = JSON.parse(JSON.stringify(fullSource.fields));
+      newFields["id"] = { [firstLocale]: newOpcoId };
+      newFields["internalName"] = { [firstLocale]: newOpcoName };
+      const newEntry = await environment.createEntry("opco", {
+        fields: newFields,
+      });
+      set(1, { status: "success", detail: newEntry.sys.id });
+
+      setNewEntrySysId(newEntry.sys.id);
+      setCreationDone(true);
+    } catch (err: any) {
+      const msg: string = err?.message ?? String(err);
+      // Mark the currently-running step as error
+      setCreationSteps((prev) =>
+        prev.map((s) =>
+          s.status === "running" ? { ...s, status: "error", detail: msg } : s,
+        ),
+      );
+      setCreationHasError(true);
+      setCreationDone(true);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCreatePartner = async () => {
+    if (!sourceId || !targetOpcoId) return;
+    const sourceEntry = allCfPartners.find(
+      (p) =>
+        resolveStringField(p.fields["id"], firstLocale) === sourceId ||
+        p.sys.id === sourceId,
+    );
+    if (!sourceEntry) return;
+    const targetOpcoEntry = opcos.items.find(
+      (o) =>
+        resolveStringField(o.fields["id"], firstLocale) === targetOpcoId ||
+        o.sys.id === targetOpcoId,
+    );
+    if (!targetOpcoEntry) return;
+
+    const STEPS: CreationStepItem[] = [
+      { label: "Reading source entry", status: "pending" },
+      { label: "Creating partner entry (draft)", status: "pending" },
+    ];
+    setCreationSteps(STEPS);
+    setCreating(true);
+    setCreationDone(false);
+    setCreationHasError(false);
+
+    const set = (i: number, patch: Partial<CreationStepItem>) =>
+      setCreationSteps((prev) =>
+        prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)),
+      );
+
+    try {
+      set(0, { status: "running", detail: sourceEntry.sys.id });
+      const environment = await getContentfulManagementEnvironment();
+      const fullSource = await environment.getEntry(sourceEntry.sys.id);
+      set(0, { status: "success", detail: sourceEntry.sys.id });
+
+      set(1, { status: "running", detail: `id: ${newPartnerId}` });
+      const newFields = JSON.parse(JSON.stringify(fullSource.fields));
+      newFields["id"] = { [firstLocale]: newPartnerId };
+      if (newPartnerDisplayName)
+        newFields["name"] = { [firstLocale]: newPartnerDisplayName };
+      newFields["internalName"] = { [firstLocale]: newPartnerName };
+      newFields["opco"] = {
+        [firstLocale]: {
+          sys: { type: "Link", linkType: "Entry", id: targetOpcoEntry.sys.id },
+        },
+      };
+      const newEntry = await environment.createEntry("partner", {
+        fields: newFields,
+      });
+      set(1, { status: "success", detail: newEntry.sys.id });
+
+      setNewEntrySysId(newEntry.sys.id);
+      setCreationDone(true);
+    } catch (err: any) {
+      const msg: string = err?.message ?? String(err);
+      setCreationSteps((prev) =>
+        prev.map((s) =>
+          s.status === "running" ? { ...s, status: "error", detail: msg } : s,
+        ),
+      );
+      setCreationHasError(true);
+      setCreationDone(true);
+    } finally {
+      setCreating(false);
+    }
   };
 
   const existingOpcoIds = opcos.items.map(
     (o) => resolveStringField(o.fields["id"], firstLocale) || o.sys.id,
+  );
+  const existingPartnerIds = allCfPartners.map(
+    (p) => resolveStringField(p.fields["id"], firstLocale) || p.sys.id,
   );
 
   const opcoDetailsValid =
@@ -802,13 +1457,24 @@ export function CreateNewModal({
     !existingOpcoIds.includes(newOpcoId.trim()) &&
     newOpcoName.trim().length > 0;
 
-  // Step indicator: 4 bubbles for OPCO, 4 for partner
+  const partnerDetailsValid =
+    newPartnerDisplayName.trim().length > 0 &&
+    newPartnerId.trim().length > 0 &&
+    /^[a-z0-9][a-z0-9_-]*$/.test(newPartnerId.trim()) &&
+    !existingPartnerIds.includes(newPartnerId.trim()) &&
+    newPartnerName.trim().length > 0;
+
+  const detailsValid =
+    createType === "opco" ? opcoDetailsValid : partnerDetailsValid;
+
+  // Step indicator: 5 bubbles for partner (includes OPCO step), 4 for OPCO
   const stepDefs: { step: Step; label: string }[] =
     createType === "partner"
       ? [
           { step: 1, label: "Type" },
           { step: 2, label: "OPCO" },
           { step: 3, label: "Source" },
+          { step: 4, label: "Details" },
           { step: 5, label: "Preview" },
         ]
       : [
@@ -827,7 +1493,10 @@ export function CreateNewModal({
       createType === "opco"
         ? "Select a source OPCO to duplicate"
         : "Select a source partner to duplicate",
-    4: "Set a unique ID and name for the new OPCO",
+    4:
+      createType === "partner"
+        ? "Set a unique ID and name for the new partner"
+        : "Set a unique ID and name for the new OPCO",
     5: "Preview what will be created",
   };
 
@@ -945,49 +1614,78 @@ export function CreateNewModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {step === 1 && <Step1TypeSelect onSelect={handleTypeSelect} />}
-          {step === 2 && (
-            <Step2TargetOpco
-              opcos={opcos}
-              firstLocale={firstLocale}
-              selectedOpcoId={selectedOpco}
-              onSelect={handleTargetOpcoSelect}
+          {creating || creationDone ? (
+            <CreationProgressView
+              steps={creationSteps}
+              allDone={creationDone}
+              hasError={creationHasError}
+              entityLabel={createType === "partner" ? "Partner" : "OPCO"}
+              newEntryName={
+                createType === "partner" ? newPartnerName : newOpcoName
+              }
+              contentfulSysId={newEntrySysId}
             />
-          )}
-          {step === 3 && createType && (
-            <Step3SourceSelect
-              type={createType}
-              opcos={opcos}
-              allCfPartners={allCfPartners}
-              loadingPartners={loadingPartners}
-              firstLocale={firstLocale}
-              selectedOpco={selectedOpco}
-              selectedPartner={selectedPartner}
-              onSelect={handleSourceSelect}
-            />
-          )}
-          {step === 4 && (
-            <Step4OpcoDetails
-              existingOpcoIds={existingOpcoIds}
-              newOpcoDisplayName={newOpcoDisplayName}
-              newOpcoId={newOpcoId}
-              newOpcoName={newOpcoName}
-              onChangeDisplayName={setNewOpcoDisplayName}
-              onChangeId={setNewOpcoId}
-              onChangeName={setNewOpcoName}
-            />
-          )}
-          {step === 5 && createType && sourceId && (
-            <Step5Preview
-              type={createType}
-              sourceId={sourceId}
-              targetOpcoId={targetOpcoId}
-              newOpcoId={newOpcoId}
-              newOpcoName={newOpcoName}
-              opcos={opcos}
-              allCfPartners={allCfPartners}
-              firstLocale={firstLocale}
-            />
+          ) : (
+            <>
+              {step === 1 && <Step1TypeSelect onSelect={handleTypeSelect} />}
+              {step === 2 && (
+                <Step2TargetOpco
+                  opcos={opcos}
+                  firstLocale={firstLocale}
+                  selectedOpcoId={selectedOpco}
+                  onSelect={handleTargetOpcoSelect}
+                />
+              )}
+              {step === 3 && createType && (
+                <Step3SourceSelect
+                  type={createType}
+                  opcos={opcos}
+                  allCfPartners={allCfPartners}
+                  loadingPartners={loadingPartners}
+                  firstLocale={firstLocale}
+                  selectedOpco={selectedOpco}
+                  selectedPartner={selectedPartner}
+                  onSelect={handleSourceSelect}
+                />
+              )}
+              {step === 4 && createType === "opco" && (
+                <Step4OpcoDetails
+                  existingOpcoIds={existingOpcoIds}
+                  newOpcoDisplayName={newOpcoDisplayName}
+                  newOpcoId={newOpcoId}
+                  newOpcoName={newOpcoName}
+                  onChangeDisplayName={setNewOpcoDisplayName}
+                  onChangeId={setNewOpcoId}
+                  onChangeName={setNewOpcoName}
+                />
+              )}
+              {step === 4 && createType === "partner" && (
+                <Step4PartnerDetails
+                  existingPartnerIds={existingPartnerIds}
+                  newPartnerDisplayName={newPartnerDisplayName}
+                  newPartnerId={newPartnerId}
+                  newPartnerName={newPartnerName}
+                  onChangeDisplayName={setNewPartnerDisplayName}
+                  onChangeId={setNewPartnerId}
+                  onChangeName={setNewPartnerName}
+                />
+              )}
+              {step === 5 && createType && sourceId && (
+                <Step5Preview
+                  type={createType}
+                  sourceId={sourceId}
+                  targetOpcoId={targetOpcoId}
+                  newOpcoId={newOpcoId}
+                  newOpcoName={newOpcoName}
+                  newPartnerId={newPartnerId}
+                  newPartnerDisplayName={newPartnerDisplayName}
+                  newPartnerName={newPartnerName}
+                  opcos={opcos}
+                  allCfPartners={allCfPartners}
+                  firstLocale={firstLocale}
+                />
+              )}
+            </>
           )}
         </div>
 
@@ -1020,17 +1718,20 @@ export function CreateNewModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handleClose}
-              className="px-3 py-1.5 rounded-md border border-gray-200 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+              disabled={creating}
+              className="px-3 py-1.5 rounded-md border border-gray-200 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
-            {step === 4 && (
+            {step === 4 && !creating && !creationDone && (
               <button
                 onClick={() => setStep(5)}
-                disabled={!opcoDetailsValid}
+                disabled={!detailsValid}
                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md border text-xs font-semibold transition-colors ${
-                  opcoDetailsValid
-                    ? "bg-violet-500 border-violet-600 text-white hover:bg-violet-600 cursor-pointer"
+                  detailsValid
+                    ? accent === "emerald"
+                      ? "bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-600 cursor-pointer"
+                      : "bg-violet-500 border-violet-600 text-white hover:bg-violet-600 cursor-pointer"
                     : "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
                 }`}
               >
@@ -1050,11 +1751,62 @@ export function CreateNewModal({
                 </svg>
               </button>
             )}
-            {step === 5 && (
+            {step === 5 &&
+              createType === "opco" &&
+              !creating &&
+              !creationDone && (
+                <button
+                  onClick={handleCreateOpco}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-violet-500 border border-violet-600 text-xs font-semibold text-white hover:bg-violet-600 transition-colors cursor-pointer"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  Create in Contentful
+                </button>
+              )}
+            {step === 5 &&
+              createType === "partner" &&
+              !creating &&
+              !creationDone && (
+                <button
+                  onClick={handleCreatePartner}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-emerald-500 border border-emerald-600 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  Create in Contentful
+                </button>
+              )}
+            {creationDone && !creationHasError && (
               <button
-                disabled
-                title="Contentful creation coming soon"
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-gray-100 border border-gray-200 text-xs font-semibold text-gray-400 cursor-not-allowed"
+                onClick={() => {
+                  const id = createType === "opco" ? newOpcoId : newPartnerId;
+                  handleClose();
+                  onCreated?.({ type: createType!, id });
+                }}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-emerald-500 border border-emerald-600 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
               >
                 <svg
                   className="w-3.5 h-3.5"
@@ -1066,13 +1818,23 @@ export function CreateNewModal({
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M12 4v16m8-8H4"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                Create in Contentful
-                <span className="ml-0.5 px-1 py-0.5 text-[9px] bg-gray-200 text-gray-500 rounded font-bold uppercase tracking-wider">
-                  Soon
-                </span>
+                Reload now
+              </button>
+            )}
+            {creationDone && creationHasError && (
+              <button
+                onClick={() => {
+                  setCreationSteps([]);
+                  setCreating(false);
+                  setCreationDone(false);
+                  setCreationHasError(false);
+                }}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-gray-100 border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                Try again
               </button>
             )}
           </div>

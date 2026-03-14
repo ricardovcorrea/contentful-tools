@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import { useRouteLoaderData, useNavigate } from "react-router";
 import { resolveStringField } from "~/lib/resolve-string-field";
+import { getContentfulManagementEntries } from "~/lib/contentful";
 import type { RefGroup } from "~/lib/contentful/get-entry-tree";
 
 type Locale = {
@@ -463,6 +465,764 @@ function ScheduledCard({
   );
 }
 
+// ── Sitemap ───────────────────────────────────────────────────────────────
+
+type SitemapPage = {
+  sysId: string;
+  name: string;
+  slug: string | null;
+  pageType: string | null;
+  sectionsCount: number;
+  scope: "opco" | "partner";
+  opcoId: string | null;
+  opcoLabel: string | null;
+  status: "published" | "changed" | "draft";
+  sitemapIncluded: boolean;
+  sitemapReason: string;
+  sitemapField: string | null;
+};
+
+// Detect whether a page entry should appear in a sitemap.
+// Priority order:
+//   1. Explicit "include" boolean fields (addToSitemap, includeInSitemap, …)
+//   2. Explicit "exclude" boolean fields (noIndex, hideFromSearch, …)
+//   3. Heuristic: has a slug + not a draft
+function detectSitemapEligibility(
+  fields: Record<string, any>,
+  slug: string | null,
+  status: "published" | "changed" | "draft",
+  firstLocale: string,
+): { included: boolean; reason: string; field: string | null } {
+  const resolveBool = (val: unknown): boolean | null => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "object") {
+      const v =
+        (val as Record<string, unknown>)[firstLocale] ??
+        Object.values(val as Record<string, unknown>)[0];
+      if (typeof v === "boolean") return v;
+    }
+    return null;
+  };
+
+  // Positive fields — true means "include in sitemap"
+  for (const key of [
+    "addToSitemap",
+    "includeInSitemap",
+    "sitemap",
+    "indexable",
+    "searchable",
+  ]) {
+    const b = resolveBool(fields[key]);
+    if (b === true)
+      return { included: true, reason: `${key} = true`, field: key };
+    if (b === false)
+      return { included: false, reason: `${key} = false`, field: key };
+  }
+
+  // Negative fields — true means "exclude from sitemap"
+  for (const key of [
+    "noIndex",
+    "noindex",
+    "hideFromSearch",
+    "excludeFromSitemap",
+    "hidden",
+    "isPrivate",
+    "private",
+  ]) {
+    const b = resolveBool(fields[key]);
+    if (b === true)
+      return { included: false, reason: `${key} = true`, field: key };
+    if (b === false)
+      return { included: true, reason: `${key} = false`, field: key };
+  }
+
+  // Heuristics
+  if (!slug) return { included: false, reason: "No slug", field: null };
+  if (status === "draft")
+    return { included: false, reason: "Draft — not published", field: null };
+  return { included: true, reason: "Published with slug", field: null };
+}
+
+function buildSitemapPages(
+  allItems: any[],
+  firstLocale: string,
+  defaultOpcoLabel?: string,
+): SitemapPage[] {
+  const resolve = (fields: Record<string, any>, key: string): string | null => {
+    const val = fields[key];
+    if (!val) return null;
+    if (typeof val === "string") return val;
+    return val[firstLocale] ?? (Object.values(val)[0] as string | null) ?? null;
+  };
+
+  return allItems.map((item): SitemapPage => {
+    const fields: Record<string, any> = item.fields ?? {};
+    const name =
+      resolve(fields, "internalName") ||
+      resolve(fields, "title") ||
+      resolve(fields, "name") ||
+      item.sys.id;
+    const slug =
+      resolve(fields, "slug") ||
+      resolve(fields, "path") ||
+      resolve(fields, "url") ||
+      resolve(fields, "route") ||
+      null;
+    const pageType =
+      resolve(fields, "pageType") || resolve(fields, "type") || null;
+    const sections = fields["sections"];
+    const sectionsCount = Array.isArray(sections?.[firstLocale])
+      ? sections[firstLocale].length
+      : Array.isArray(sections)
+        ? sections.length
+        : 0;
+    const pub = item.sys?.publishedAt;
+    const upd = item.sys?.updatedAt;
+    const status: SitemapPage["status"] = !pub
+      ? "draft"
+      : upd && new Date(upd) > new Date(pub)
+        ? "changed"
+        : "published";
+    const { included, reason, field } = detectSitemapEligibility(
+      fields,
+      slug,
+      status,
+      firstLocale,
+    );
+
+    // Determine scope from the presence of a partner link field
+    const scope: "opco" | "partner" =
+      fields["partner"] !== undefined && fields["partner"] !== null
+        ? "partner"
+        : "opco";
+
+    // Resolve the OPCO this page belongs to (via its opco link field)
+    const opcoLink = fields["opco"];
+    const opcoFields: Record<string, any> | null =
+      opcoLink?.[firstLocale]?.fields ?? opcoLink?.fields ?? null;
+    const opcoId: string | null = opcoFields
+      ? (resolve(opcoFields, "id") ?? null)
+      : null;
+    const opcoLabel: string | null = opcoFields
+      ? (resolve(opcoFields, "internalName") ??
+        resolve(opcoFields, "title") ??
+        opcoId)
+      : (defaultOpcoLabel ?? null);
+
+    return {
+      sysId: item.sys.id,
+      name: name as string,
+      slug,
+      pageType,
+      sectionsCount,
+      scope,
+      opcoId,
+      opcoLabel,
+      status,
+      sitemapIncluded: included,
+      sitemapReason: reason,
+      sitemapField: field,
+    };
+  });
+}
+
+// Build a flat URL tree. Each node = one path segment.
+type TreeNode = {
+  segment: string;
+  fullSlug: string;
+  page: SitemapPage | null;
+  children: TreeNode[];
+};
+
+function buildTree(pages: SitemapPage[]): TreeNode[] {
+  const root: TreeNode = {
+    segment: "",
+    fullSlug: "",
+    page: null,
+    children: [],
+  };
+
+  const pagesWithSlug = pages.filter((p) => p.slug);
+  const pagesWithout = pages.filter((p) => !p.slug);
+
+  for (const page of pagesWithSlug) {
+    const stripped = page.slug!.replace(/^\//, "").replace(/\/$/, "");
+
+    // Root page "/" — slug becomes empty after stripping
+    if (!stripped) {
+      root.page = page;
+      continue;
+    }
+
+    const parts = stripped.split("/").filter(Boolean);
+    let node = root;
+    let accumulated = "";
+    for (let i = 0; i < parts.length; i++) {
+      accumulated = accumulated ? `${accumulated}/${parts[i]}` : parts[i];
+      let child = node.children.find((c) => c.segment === parts[i]);
+      if (!child) {
+        child = {
+          segment: parts[i],
+          fullSlug: accumulated,
+          page: null,
+          children: [],
+        };
+        node.children.push(child);
+      }
+      if (i === parts.length - 1) child.page = page;
+      node = child;
+    }
+  }
+
+  // If root itself has a page (slug="/"), promote it as first entry with children attached
+  const rootEntries: TreeNode[] =
+    root.page !== null
+      ? [
+          {
+            segment: "",
+            fullSlug: "/",
+            page: root.page,
+            children: root.children,
+          },
+        ]
+      : root.children;
+
+  // Pages with no slug — show by name, no path segment
+  const fallbackEntries: TreeNode[] = pagesWithout.map((p) => ({
+    segment: p.name, // use readable name instead of sys.id
+    fullSlug: "",
+    page: p,
+    children: [],
+  }));
+
+  return [...rootEntries, ...fallbackEntries];
+}
+
+function StatusDot({ status }: { status: SitemapPage["status"] }) {
+  const cls =
+    status === "published"
+      ? "bg-emerald-400"
+      : status === "changed"
+        ? "bg-amber-400"
+        : "bg-gray-300";
+  return (
+    <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${cls}`} />
+  );
+}
+
+function ScopeTag({ scope }: { scope: "opco" | "partner" }) {
+  const cls =
+    scope === "opco"
+      ? "text-violet-500 bg-violet-50 border-violet-200/60"
+      : "text-emerald-600 bg-emerald-50 border-emerald-200/60";
+  return (
+    <span
+      className={`text-[7px] font-bold uppercase px-1 py-px rounded border ${cls}`}
+    >
+      {scope === "opco" ? "OPCO" : "Partner"}
+    </span>
+  );
+}
+
+function PageCard({
+  page,
+  spaceId,
+  environmentId,
+}: {
+  page: SitemapPage;
+  spaceId: string;
+  environmentId: string;
+}) {
+  const url = `https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${page.sysId}`;
+  const included = page.sitemapIncluded;
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`group flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 hover:shadow-sm transition-all ${
+        included
+          ? "bg-white border-gray-200 hover:border-emerald-300"
+          : "bg-gray-50/60 border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-90"
+      }`}
+    >
+      {/* Sitemap badge row */}
+      <div className="flex items-center justify-between gap-1.5">
+        {included ? (
+          <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded">
+            <svg
+              className="w-2.5 h-2.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            In sitemap
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded">
+            <svg
+              className="w-2.5 h-2.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+              />
+            </svg>
+            Excluded
+          </span>
+        )}
+        <StatusDot status={page.status} />
+      </div>
+
+      {/* Page name */}
+      <p className="text-[11px] font-semibold text-gray-800 leading-snug break-words group-hover:text-gray-900">
+        {page.name}
+      </p>
+
+      {/* Slug */}
+      {page.slug ? (
+        <p className="text-[10px] font-mono text-gray-400 truncate">
+          /{page.slug.replace(/^\//, "")}
+        </p>
+      ) : (
+        <p className="text-[10px] text-gray-300 italic">no slug</p>
+      )}
+
+      {/* Reason */}
+      <p
+        className={`text-[9px] truncate ${
+          included ? "text-emerald-600/70" : "text-gray-400"
+        }`}
+      >
+        {page.sitemapField ? (
+          <>
+            <span className="font-mono">{page.sitemapField}</span>
+            {" — "}
+            {page.sitemapReason.split(" = ")[1]}
+          </>
+        ) : (
+          page.sitemapReason
+        )}
+      </p>
+
+      {/* Footer tags */}
+      <div className="flex items-center gap-1 flex-wrap mt-0.5">
+        {page.opcoLabel ? (
+          <span className="text-[7px] font-bold uppercase px-1 py-px rounded border text-violet-500 bg-violet-50 border-violet-200/60">
+            {page.opcoLabel}
+          </span>
+        ) : (
+          <ScopeTag scope={page.scope} />
+        )}
+        {page.scope === "partner" && (
+          <span className="text-[7px] font-bold uppercase px-1 py-px rounded border text-emerald-600 bg-emerald-50 border-emerald-200/60">
+            Partner
+          </span>
+        )}
+        {page.pageType && (
+          <span className="text-[7px] font-semibold uppercase px-1 py-px rounded border border-sky-200/60 text-sky-500 bg-sky-50">
+            {page.pageType}
+          </span>
+        )}
+        {page.sectionsCount > 0 && (
+          <span className="text-[7px] font-semibold text-gray-400 ml-auto">
+            {page.sectionsCount}§
+          </span>
+        )}
+      </div>
+    </a>
+  );
+}
+
+function TreeNodeRow({
+  node,
+  depth,
+  spaceId,
+  environmentId,
+}: {
+  node: TreeNode;
+  depth: number;
+  spaceId: string;
+  environmentId: string;
+}) {
+  const [open, setOpen] = useState(true);
+  const hasChildren = node.children.length > 0;
+  const isRoot = node.fullSlug !== "" || node.page !== null;
+
+  if (!isRoot) return null;
+
+  // Label shown in the path segment row
+  const segmentLabel =
+    node.fullSlug === "/" || node.segment === ""
+      ? "/" // root page
+      : node.page && !node.page.slug
+        ? node.segment // no-slug page: segment IS already the name
+        : `/${node.segment}`; // normal path segment
+
+  return (
+    <div className="flex flex-col">
+      {/* Segment row */}
+      <div
+        className="flex items-center gap-1.5 mb-1"
+        style={{ paddingLeft: `${depth * 14}px` }}
+      >
+        {depth > 0 && (
+          <div className="flex items-center gap-0.5 shrink-0">
+            <span className="text-gray-200 text-xs">└</span>
+          </div>
+        )}
+        {hasChildren && (
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="shrink-0 text-gray-400 hover:text-gray-600"
+          >
+            <svg
+              className={`w-2.5 h-2.5 transition-transform ${open ? "rotate-90" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        )}
+        {!hasChildren && <span className="w-2.5 shrink-0" />}
+        <span
+          className={`text-[9px] font-mono truncate max-w-[220px] ${
+            node.page && !node.page.slug
+              ? "text-gray-400 italic not-italic" // no-slug: show name dimly
+              : "text-gray-400"
+          }`}
+        >
+          {segmentLabel}
+        </span>
+        {node.page && (
+          <div className="flex items-center gap-1 ml-auto">
+            {node.page.sitemapIncluded ? (
+              <svg
+                className="w-3 h-3 text-emerald-500 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-3 h-3 text-gray-300 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                />
+              </svg>
+            )}
+            <StatusDot status={node.page.status} />
+            <ScopeTag scope={node.page.scope} />
+          </div>
+        )}
+      </div>
+      {/* Card if this node has a page */}
+      {node.page && (
+        <div style={{ paddingLeft: `${depth * 14 + 18}px` }} className="mb-1.5">
+          <PageCard
+            page={node.page}
+            spaceId={spaceId}
+            environmentId={environmentId}
+          />
+        </div>
+      )}
+      {/* Children */}
+      {open &&
+        node.children.map((child) => (
+          <TreeNodeRow
+            key={child.fullSlug || child.segment}
+            node={child}
+            depth={depth + 1}
+            spaceId={spaceId}
+            environmentId={environmentId}
+          />
+        ))}
+    </div>
+  );
+}
+
+function SitemapSection({
+  opcoName,
+  opcoPages,
+  opcoPartners,
+  firstLocale,
+  spaceId,
+  environmentId,
+}: {
+  opcoName: string;
+  opcoPages: { items: any[] };
+  opcoPartners: { items: any[] };
+  firstLocale: string;
+  spaceId: string;
+  environmentId: string;
+}) {
+  const [allPages, setAllPages] = useState<SitemapPage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const partnerSysIds = opcoPartners.items.map((p: any) => p.sys.id);
+
+    // Fetch partner pages for ALL partners of this OPCO in one query.
+    // If there are no partners just resolve immediately with an empty list.
+    const partnerPagePromise =
+      partnerSysIds.length > 0
+        ? getContentfulManagementEntries({
+            content_type: "page",
+            "fields.partner.sys.id[in]": partnerSysIds.join(","),
+            limit: 1000,
+          }).then((res) => res.items)
+        : Promise.resolve([] as any[]);
+
+    partnerPagePromise
+      .then((partnerItems) => {
+        if (cancelled) return;
+        // Combine: pre-loaded OPCO pages + fetched partner pages
+        const combined = [...opcoPages.items, ...partnerItems];
+        setAllPages(buildSitemapPages(combined, firstLocale, opcoName));
+      })
+      .catch((e: any) => {
+        if (cancelled) return;
+        setError(e?.message ?? "Failed to load partner pages");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstLocale, opcoPages, opcoPartners, opcoName]);
+
+  const inSitemap = allPages.filter((p) => p.sitemapIncluded).length;
+  const excluded = allPages.filter((p) => !p.sitemapIncluded).length;
+  const tree = loading ? [] : buildTree(allPages);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/60 flex items-center gap-3 flex-wrap">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+          Sitemap
+        </p>
+        <div className="flex items-center gap-1.5 text-[9px] font-semibold">
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200/60 text-emerald-700">
+            <svg
+              className="w-2.5 h-2.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            {inSitemap} in sitemap
+          </span>
+          {excluded > 0 && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-gray-500">
+              <svg
+                className="w-2.5 h-2.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                />
+              </svg>
+              {excluded} excluded
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Body */}
+      {loading ? (
+        <div className="flex items-center justify-center gap-3 py-12 text-gray-400">
+          <svg
+            className="w-4 h-4 animate-spin shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
+          </svg>
+          <span className="text-xs font-medium">Loading all pages…</span>
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-red-500">
+          <svg
+            className="w-4 h-4 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+            />
+          </svg>
+          <span className="text-xs font-medium">{error}</span>
+        </div>
+      ) : allPages.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
+          <svg
+            className="w-7 h-7"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          <p className="text-xs font-medium">No pages found</p>
+        </div>
+      ) : (
+        <div className="px-4 py-4 overflow-x-auto">
+          {/* Legend */}
+          <div className="flex items-center gap-4 mb-3 text-[8px] font-semibold text-gray-400 uppercase tracking-wider">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              Published
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+              Unpublished changes
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />
+              Draft
+            </span>
+            <span className="ml-auto flex items-center gap-1 text-emerald-600">
+              <svg
+                className="w-2.5 h-2.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              In sitemap
+            </span>
+            <span className="flex items-center gap-1">
+              <svg
+                className="w-2.5 h-2.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                />
+              </svg>
+              Excluded
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            {tree.map((node) => (
+              <TreeNodeRow
+                key={node.fullSlug || node.segment}
+                node={node}
+                depth={0}
+                spaceId={spaceId}
+                environmentId={environmentId}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/40 flex items-center gap-2">
+        <span className="text-[9px] text-gray-400">
+          {loading
+            ? "Loading…"
+            : `${allPages.filter((p) => p.scope === "opco").length} OPCO · ${allPages.filter((p) => p.scope === "partner").length} partner pages`}
+        </span>
+        <span className="text-[9px] text-gray-300">·</span>
+        <span className="text-[9px] text-gray-400">
+          Sitemap eligibility is determined by{" "}
+          <span className="font-mono">addToSitemap</span>,{" "}
+          <span className="font-mono">noIndex</span>, slug presence, and publish
+          status
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function UnpublishedCard({
   entries,
   firstLocale,
@@ -775,6 +1535,18 @@ export default function EnvironmentOverview() {
               scope: "partner" as const,
             })),
           ]}
+          firstLocale={firstLocale}
+          spaceId={spaceId}
+          environmentId={environmentId}
+        />
+      </div>
+
+      {/* Sitemap section */}
+      <div className="mt-5">
+        <SitemapSection
+          opcoName={opcoName as string}
+          opcoPages={opcoPages}
+          opcoPartners={opcoPartners}
           firstLocale={firstLocale}
           spaceId={spaceId}
           environmentId={environmentId}

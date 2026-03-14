@@ -6,6 +6,7 @@ import { CellValue } from "~/components/overview/CellValue";
 import type { EntryGroup } from "~/types/contentful";
 import { resolveStringField } from "~/lib/resolve-string-field";
 import { useToast } from "~/lib/toast";
+import { useEditMode } from "~/lib/edit-mode";
 
 // ── Hook ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ export function GroupTable({
     useLocalizableFields(contentTypeId);
 
   const { addToast } = useToast();
+  const { editMode } = useEditMode();
 
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [editingCell, setEditingCell] = useState<string | null>(null);
@@ -382,9 +384,12 @@ export function GroupTable({
                                   <div className="flex items-center gap-1.5 mt-1.5">
                                     <button
                                       disabled={
-                                        isSaving || !editingValue.trim()
+                                        isSaving ||
+                                        !editingValue.trim() ||
+                                        !editMode
                                       }
                                       onClick={() =>
+                                        editMode &&
                                         handleSaveInline(
                                           item.sys.id,
                                           fieldId,
@@ -446,6 +451,7 @@ export function GroupTable({
                                       : "hover:bg-blue-50/70"
                                 }`}
                                 onClick={(e) => {
+                                  if (!editMode) return;
                                   e.stopPropagation();
                                   setEditingCell(ck);
                                   setEditingValue(
@@ -454,7 +460,11 @@ export function GroupTable({
                                       : "",
                                   );
                                 }}
-                                title={`Click to edit ${fieldId} / ${lc}`}
+                                title={
+                                  editMode
+                                    ? `Click to edit ${fieldId} / ${lc}`
+                                    : "Enable Edit mode to make changes"
+                                }
                               >
                                 {isLocallySaved ? (
                                   <span className="flex items-center gap-1.5">

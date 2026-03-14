@@ -10,6 +10,8 @@ import { EditModeProvider } from "~/lib/edit-mode";
 import {
   dispatchLoadStep,
   dispatchLoadComplete,
+  dispatchLoadDetail,
+  LoadingScreen,
 } from "~/components/loading-screen";
 import {
   Outlet,
@@ -82,6 +84,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     spaceObj: any,
     spacesCollection: any;
   dispatchLoadStep(0);
+  dispatchLoadDetail(["OPCOs list", "Locales", "Current user", "Space info"]);
   try {
     [opcos, locales, currentUser, spaceObj, spacesCollection] =
       await Promise.all([
@@ -139,10 +142,17 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     return raw;
   };
 
-  const opcoId =
+  let opcoId =
     safeStoredId(url.searchParams.get("opco")) ??
     safeStoredId(localStorage.getItem("selectedOpco")) ??
     defaultOpcoId;
+
+  // If the stored/URL opco ID is no longer in the list (e.g. was deleted),
+  // fall back to the first available OPCO.
+  const availableOpcoIds = opcos.items.map((o: any) => getOpcoFieldId(o));
+  if (opcoId && !availableOpcoIds.includes(opcoId)) {
+    opcoId = availableOpcoIds[0] ?? opcoId;
+  }
 
   // Narrow locales to those configured on the selected OPCO entry.
   // The "locales" field on the opco content type is expected to be an array
@@ -193,6 +203,11 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   // none depend on each other; opcoId is already known from step 0.
   let envObj: any, environmentsList: any, opcoPartners: any;
   dispatchLoadStep(1);
+  dispatchLoadDetail([
+    `Environment: ${environment}`,
+    `Partners for ${opcoId}`,
+    "Available environments",
+  ]);
   try {
     [envObj, environmentsList, opcoPartners] = await Promise.all([
       withCache(`env:${spaceId}:${environment}`, () =>
@@ -234,10 +249,23 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     opcoPartners.items[0]?.fields["id"],
     firstLocale,
   );
-  const partnerId =
+  let partnerId =
     safeStoredId(url.searchParams.get("partner")) ??
     safeStoredId(localStorage.getItem("selectedPartner")) ??
     firstPartnerId;
+
+  // If the stored/URL partner ID is no longer in the list (e.g. was deleted),
+  // fall back to the first available partner for this OPCO.
+  const availablePartnerIds = opcoPartners.items.map((p: any) =>
+    resolveStringField(p.fields["id"], firstLocale),
+  );
+  if (
+    partnerId &&
+    availablePartnerIds.length > 0 &&
+    !availablePartnerIds.includes(partnerId)
+  ) {
+    partnerId = availablePartnerIds[0] ?? partnerId;
+  }
 
   // Persist resolved values
   localStorage.setItem("selectedOpco", opcoId);
@@ -250,6 +278,13 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     partnerMessages: any,
     partnerEmails: any;
   dispatchLoadStep(2);
+  dispatchLoadDetail([
+    `Pages for ${opcoId}`,
+    `Messages for ${opcoId}`,
+    `Pages for partner ${partnerId}`,
+    `Messages for partner ${partnerId}`,
+    `Emails for partner ${partnerId}`,
+  ]);
   try {
     [opcoPages, opcoMessages, partnerPages, partnerMessages, partnerEmails] =
       await Promise.all([
@@ -289,6 +324,10 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   // Step 3: build OPCO + partner content trees in parallel (was sequential)
   dispatchLoadStep(3);
+  dispatchLoadDetail([
+    `OPCO tree — ${opcoPageIds.length} root page${opcoPageIds.length !== 1 ? "s" : ""}`,
+    `Partner tree — ${partnerPageIds.length} root page${partnerPageIds.length !== 1 ? "s" : ""}`,
+  ]);
   const [opcoRefGroups, partnerRefGroups]: [RefGroup[], RefGroup[]] =
     await Promise.all([
       opcoPageIds.length > 0
@@ -320,6 +359,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       ...partnerRefGroups.map((g) => g.contentTypeId),
     ]),
   ];
+  dispatchLoadDetail(uniqueCtIds.map((id) => `Content type: ${id}`));
   const ctResults = await Promise.all(
     uniqueCtIds.map((id) =>
       getContentType(id)
@@ -353,10 +393,11 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const scheduledActions = await scheduledActionsPromise;
 
   dispatchLoadStep(5);
+  dispatchLoadDetail(["Applying locale filters", "Finalising workspace"]);
 
-  // Mark all steps done, wait 500ms so the user sees the completed state.
+  // Mark all steps done, wait 3s so the user can read the loading feedback.
   dispatchLoadComplete();
-  await new Promise((r) => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, 3000));
 
   return {
     opcos,
@@ -626,6 +667,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const [opcoExpanded, setOpcoExpanded] = useState(shouldExpandOpco);
   const [partnerExpanded, setPartnerExpanded] = useState(shouldExpandPartner);
   const [sidebarResetKey, setSidebarResetKey] = useState(0);
+  const [showFullLoading, setShowFullLoading] = useState(false);
 
   useEffect(() => {
     if (shouldExpandOpco) setOpcoExpanded(true);
@@ -633,6 +675,11 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   useEffect(() => {
     if (shouldExpandPartner) setPartnerExpanded(true);
   }, [shouldExpandPartner]);
+
+  // Hide full loading screen once the navigation finishes
+  useEffect(() => {
+    if (!isLoading && showFullLoading) setShowFullLoading(false);
+  }, [isLoading, showFullLoading]);
 
   // Refresh data when the tab regains visibility and the cache has gone stale.
   useEffect(() => {
@@ -663,6 +710,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     setOpcoExpanded(false);
     setPartnerExpanded(false);
     setSidebarResetKey((k) => k + 1);
+    setShowFullLoading(true);
     const params = new URLSearchParams(searchParams);
     params.set("opco", id);
     params.delete("partner");
@@ -673,6 +721,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     localStorage.setItem("selectedPartner", id);
     setPartnerExpanded(false);
     setSidebarResetKey((k) => k + 1);
+    setShowFullLoading(true);
     const params = new URLSearchParams(searchParams);
     params.set("partner", id);
     navigate(`/environment?${params.toString()}`);
@@ -708,6 +757,11 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   return (
     <EditModeProvider>
       <ToastProvider>
+        {showFullLoading && (
+          <div className="fixed inset-0 z-9999">
+            <LoadingScreen />
+          </div>
+        )}
         <div className="min-h-screen bg-gray-200 p-4">
           <div className="h-[calc(100vh-2rem)] max-w-[1920px] mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
             <AppHeader
@@ -731,6 +785,10 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
                   resolveStringField(opco.fields["title"], firstLocale) ||
                   resolveStringField(opco.fields["id"], firstLocale) ||
                   opco.sys.id) as string,
+                imageAssetId: (
+                  opco.fields["logo"]?.[firstLocale] ??
+                  (Object.values(opco.fields["logo"] ?? {}) as any[])[0]
+                )?.sys?.id as string | undefined,
               }))}
               selectedOpco={selectedOpco}
               onOpcoChange={handleOpcoChange}
@@ -745,6 +803,10 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
                   resolveStringField(partner.fields["title"], firstLocale) ||
                   resolveStringField(partner.fields["id"], firstLocale) ||
                   partner.sys.id) as string,
+                imageAssetId: (
+                  partner.fields["logo"]?.[firstLocale] ??
+                  (Object.values(partner.fields["logo"] ?? {}) as any[])[0]
+                )?.sys?.id as string | undefined,
               }))}
               selectedPartner={selectedPartner}
               onPartnerChange={handlePartnerChange}

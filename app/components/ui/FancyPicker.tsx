@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from "react";
+import { LogoAvatar } from "~/components/ui/LogoAvatar";
 
-export type PickerOption = { value: string; label: string };
+export type PickerOption = {
+  value: string;
+  label: string;
+  imageAssetId?: string;
+};
 
 /**
  * A custom dropdown picker replacing the native <select>.
@@ -60,11 +65,11 @@ export function FancyPicker({
                 : "border-gray-300/60 bg-gray-200/40 hover:border-gray-400 hover:bg-gray-200/70"
           }`}
         >
-          <span
-            className={`flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold shrink-0 border ${accentClass}`}
-          >
-            {initials(selected?.label ?? value)}
-          </span>
+          <LogoAvatar
+            assetId={selected?.imageAssetId}
+            fallback={initials(selected?.label ?? value)}
+            className={`w-5 h-5 rounded text-[9px] font-bold shrink-0 border ${accentClass}`}
+          />
           <div className="flex-1 min-w-0 text-left">
             <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest leading-none mb-0.5">
               {label}
@@ -98,11 +103,11 @@ export function FancyPicker({
                 : "border-gray-300/70 bg-gray-200/60 hover:border-gray-400 hover:bg-gray-200"
           }`}
         >
-          <span
-            className={`flex items-center justify-center w-7 h-7 rounded-lg text-[10px] font-bold shrink-0 border ${accentClass}`}
-          >
-            {initials(selected?.label ?? value)}
-          </span>
+          <LogoAvatar
+            assetId={selected?.imageAssetId}
+            fallback={initials(selected?.label ?? value)}
+            className={`w-7 h-7 rounded-lg text-[10px] font-bold shrink-0 border ${accentClass}`}
+          />
           <div className="flex-1 min-w-0 text-left">
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest leading-none mb-0.5">
               {label}
@@ -145,15 +150,15 @@ export function FancyPicker({
                       : "text-gray-700 hover:bg-gray-200/80 hover:text-gray-900"
                   }`}
                 >
-                  <span
-                    className={`flex items-center justify-center w-6 h-6 rounded-md text-[9px] font-bold shrink-0 border ${
+                  <LogoAvatar
+                    assetId={opt.imageAssetId}
+                    fallback={initials(opt.label)}
+                    className={`w-6 h-6 rounded-md text-[9px] font-bold shrink-0 border ${
                       isActive
                         ? "border-blue-500/40 bg-blue-500/20 text-blue-700"
                         : "border-gray-300 bg-gray-200 text-gray-600"
                     }`}
-                  >
-                    {initials(opt.label)}
-                  </span>
+                  />
                   <span className="flex-1 text-sm font-medium truncate">
                     {opt.label}
                   </span>

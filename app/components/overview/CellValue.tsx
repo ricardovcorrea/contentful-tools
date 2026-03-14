@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRouteLoaderData } from "react-router";
 import { getAsset } from "~/lib/contentful/get-asset";
 import { getEntry } from "~/lib/contentful/get-entry";
 import { isRichText, extractRichTextPlain } from "~/lib/rich-text";
@@ -19,6 +20,9 @@ export function AssetCell({
 }) {
   const [asset, setAsset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const _pd = useRouteLoaderData("routes/home") as any;
+  const _spaceId: string = _pd?.spaceId ?? "";
+  const _envId: string = _pd?.environmentId ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -58,14 +62,45 @@ export function AssetCell({
     );
   }
 
+  const _cfUrl =
+    _spaceId && _envId
+      ? `https://app.contentful.com/spaces/${_spaceId}/environments/${_envId}/assets/${assetId}`
+      : null;
+
   return (
     <div className="flex flex-col gap-1 py-0.5">
       {isImage && url && (
-        <img
-          src={url}
-          alt={typeof title === "string" ? title : assetId}
-          className="max-h-20 max-w-full rounded object-contain"
-        />
+        <div className="relative group">
+          <img
+            src={url}
+            alt={typeof title === "string" ? title : assetId}
+            className="max-h-20 max-w-full rounded object-contain"
+          />
+          {_cfUrl && (
+            <a
+              href={_cfUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Open in Contentful"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white rounded p-0.5 shadow-sm"
+            >
+              <svg
+                className="w-3 h-3 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </a>
+          )}
+        </div>
       )}
       <span className="text-xs text-gray-500">
         {typeof title === "string" ? title : assetId}

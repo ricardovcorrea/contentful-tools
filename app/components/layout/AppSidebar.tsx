@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AccordionSection } from "~/components/AccordionSection";
 import type { RefGroup } from "~/lib/contentful/get-entry-tree";
 import { resolveStringField } from "~/lib/resolve-string-field";
+import { LogoAvatar } from "~/components/ui/LogoAvatar";
 
 interface EntryCollection {
   items: any[];
@@ -52,6 +53,17 @@ function getName(fields: Record<string, any>, locale: string) {
     resolveStringField(fields["internalName"], locale) ||
     resolveStringField(fields["title"], locale);
   return name || null;
+}
+
+function resolveLogoId(
+  fields: Record<string, any> | undefined,
+  locale: string,
+): string | undefined {
+  if (!fields) return undefined;
+  const logoField = fields["logo"];
+  const link =
+    logoField?.[locale] ?? (Object.values(logoField ?? {}) as any[])[0];
+  return link?.sys?.id as string | undefined;
 }
 
 export function AppSidebar({
@@ -927,11 +939,20 @@ export function AppSidebar({
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                       }`}
                     >
-                      <div className="w-5 h-5 rounded-md border border-violet-400/20 flex items-center justify-center shrink-0">
-                        <span className="text-[8px] font-extrabold text-violet-500 uppercase tracking-tight">
-                          OPC
-                        </span>
-                      </div>
+                      <LogoAvatar
+                        assetId={resolveLogoId(
+                          opcos.items.find(
+                            (o: any) =>
+                              (resolveStringField(
+                                o.fields["id"],
+                                firstLocale,
+                              ) || o.sys.id) === selectedOpco,
+                          )?.fields,
+                          firstLocale,
+                        )}
+                        fallback="OPC"
+                        className="w-5 h-5 rounded-md border border-violet-400/20 bg-violet-500/10 text-[8px] font-extrabold text-violet-500 uppercase tracking-tight shrink-0"
+                      />
                       <span className="text-xs font-semibold text-gray-600 flex-1 truncate">
                         {getName(
                           opcos.items.find(
@@ -1224,329 +1245,73 @@ export function AppSidebar({
                   </div>
 
                   {/* Partner section */}
-                  <div>
-                    <button
-                      onClick={onPartnerToggle}
-                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
-                        isInPartnerSection
-                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-700"
-                          : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                      }`}
-                    >
-                      <div className="w-5 h-5 rounded-md border border-emerald-400/20 flex items-center justify-center shrink-0">
+                  {opcoPartners.items.length > 0 && (
+                    <div>
+                      <button
+                        onClick={onPartnerToggle}
+                        className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                          isInPartnerSection
+                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-700"
+                            : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                        }`}
+                      >
+                        <LogoAvatar
+                          assetId={resolveLogoId(
+                            opcoPartners.items.find(
+                              (p: any) =>
+                                (resolveStringField(
+                                  p.fields["id"],
+                                  firstLocale,
+                                ) || p.sys.id) === selectedPartner,
+                            )?.fields,
+                            firstLocale,
+                          )}
+                          fallback="PRT"
+                          className="w-5 h-5 rounded-md border border-emerald-400/20 bg-emerald-500/10 text-[8px] font-extrabold text-emerald-500 uppercase tracking-tight shrink-0"
+                        />
+                        <span className="text-xs font-semibold text-gray-600 flex-1 truncate">
+                          {getName(
+                            opcoPartners.items.find(
+                              (p: any) =>
+                                (resolveStringField(
+                                  p.fields["id"],
+                                  firstLocale,
+                                ) || p.sys.id) === selectedPartner,
+                            )?.fields ?? {},
+                            firstLocale,
+                          ) ?? selectedPartner}
+                        </span>
                         <svg
-                          className="w-3 h-3 text-emerald-500"
+                          className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${partnerExpanded ? "" : "-rotate-90"}`}
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
-                          strokeWidth={2}
+                          strokeWidth={2.5}
                         >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                            d="M19 9l-7 7-7-7"
                           />
                         </svg>
-                      </div>
-                      <span className="text-xs font-semibold text-gray-600 flex-1 truncate">
-                        {getName(
-                          opcoPartners.items.find(
-                            (p: any) =>
-                              (resolveStringField(
-                                p.fields["id"],
-                                firstLocale,
-                              ) || p.sys.id) === selectedPartner,
-                          )?.fields ?? {},
-                          firstLocale,
-                        ) ?? selectedPartner}
-                      </span>
-                      <svg
-                        className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${partnerExpanded ? "" : "-rotate-90"}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2.5}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
+                      </button>
 
-                    {partnerExpanded && (
-                      <>
-                        {partnerPages.items.length > 0 && (
-                          <AccordionSection
-                            label="Pages"
-                            count={partnerPages.items.length}
-                            expandKey={accordionExpandKey}
-                            collapseKey={accordionCollapseKey}
-                          >
-                            {isLocalizable(partnerPages.items) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onNavigate("/overview/partner/pages");
-                                }}
-                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/pages" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
-                              >
-                                <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
-                                  <svg
-                                    className="w-3 h-3 text-emerald-500"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                                    />
-                                  </svg>
-                                </div>
-                                <span className="text-xs font-semibold flex-1 text-emerald-700">
-                                  Translation overview
-                                </span>
-                                {groupMissingMap["partner-pages"] && (
-                                  <span
-                                    title="Has missing translations"
-                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
-                                  />
-                                )}
-                                <svg
-                                  className="w-3 h-3 text-emerald-400 shrink-0"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                  strokeWidth={2.5}
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M9 5l7 7-7 7"
-                                  />
-                                </svg>
-                              </button>
-                            )}
-                            <ul className="flex flex-col">
-                              {partnerPages.items.map((page: any) => {
-                                const active =
-                                  entryId === page.sys.id &&
-                                  !pathname.startsWith("/overview/");
-                                return (
-                                  <li key={page.sys.id}>
-                                    <button
-                                      onClick={() => onGoToEntry(page.sys.id)}
-                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                                    >
-                                      <div className="min-w-0">
-                                        <p
-                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
-                                        >
-                                          {getName(page.fields, firstLocale) ??
-                                            page.sys.id}
-                                        </p>
-                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                          {page.sys.id}
-                                        </p>
-                                      </div>
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </AccordionSection>
-                        )}
-
-                        {partnerMessages.items.length > 0 && (
-                          <AccordionSection
-                            label="Messages"
-                            count={partnerMessages.items.length}
-                            expandKey={accordionExpandKey}
-                            collapseKey={accordionCollapseKey}
-                          >
-                            {isLocalizable(partnerMessages.items) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onNavigate("/overview/partner/messages");
-                                }}
-                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/messages" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
-                              >
-                                <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
-                                  <svg
-                                    className="w-3 h-3 text-emerald-500"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                                    />
-                                  </svg>
-                                </div>
-                                <span className="text-xs font-semibold flex-1 text-emerald-700">
-                                  Translation overview
-                                </span>
-                                {groupMissingMap["partner-messages"] && (
-                                  <span
-                                    title="Has missing translations"
-                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
-                                  />
-                                )}
-                                <svg
-                                  className="w-3 h-3 text-emerald-400 shrink-0"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                  strokeWidth={2.5}
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M9 5l7 7-7 7"
-                                  />
-                                </svg>
-                              </button>
-                            )}
-                            <ul className="flex flex-col">
-                              {partnerMessages.items.map((msg: any) => {
-                                const active =
-                                  entryId === msg.sys.id &&
-                                  !pathname.startsWith("/overview/");
-                                return (
-                                  <li key={msg.sys.id}>
-                                    <button
-                                      onClick={() => onGoToEntry(msg.sys.id)}
-                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                                    >
-                                      <div className="min-w-0">
-                                        <p
-                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
-                                        >
-                                          {getName(msg.fields, firstLocale) ??
-                                            msg.sys.id}
-                                        </p>
-                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                          {msg.sys.id}
-                                        </p>
-                                      </div>
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </AccordionSection>
-                        )}
-
-                        {partnerEmails.items.length > 0 && (
-                          <AccordionSection
-                            label="Emails"
-                            count={partnerEmails.items.length}
-                            expandKey={accordionExpandKey}
-                            collapseKey={accordionCollapseKey}
-                          >
-                            {isLocalizable(partnerEmails.items) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onNavigate("/overview/partner/emails");
-                                }}
-                                className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/emails" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
-                              >
-                                <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
-                                  <svg
-                                    className="w-3 h-3 text-emerald-500"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                                    />
-                                  </svg>
-                                </div>
-                                <span className="text-xs font-semibold flex-1 text-emerald-700">
-                                  Translation overview
-                                </span>
-                                {groupMissingMap["partner-emails"] && (
-                                  <span
-                                    title="Has missing translations"
-                                    className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
-                                  />
-                                )}
-                                <svg
-                                  className="w-3 h-3 text-emerald-400 shrink-0"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                  strokeWidth={2.5}
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M9 5l7 7-7 7"
-                                  />
-                                </svg>
-                              </button>
-                            )}
-                            <ul className="flex flex-col">
-                              {partnerEmails.items.map((email: any) => {
-                                const active =
-                                  entryId === email.sys.id &&
-                                  !pathname.startsWith("/overview/");
-                                return (
-                                  <li key={email.sys.id}>
-                                    <button
-                                      onClick={() => onGoToEntry(email.sys.id)}
-                                      className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
-                                    >
-                                      <div className="min-w-0">
-                                        <p
-                                          className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
-                                        >
-                                          {getName(email.fields, firstLocale) ??
-                                            email.sys.id}
-                                        </p>
-                                        <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                          {email.sys.id}
-                                        </p>
-                                      </div>
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </AccordionSection>
-                        )}
-
-                        {partnerRefGroups.map((refGroup) => {
-                          if (refGroup.items.length === 0) return null;
-                          const overviewPath = `/overview/partner/${refGroup.slug}`;
-                          return (
+                      {partnerExpanded && (
+                        <>
+                          {partnerPages.items.length > 0 && (
                             <AccordionSection
-                              key={`ref-partner-${refGroup.contentTypeId}`}
-                              label={refGroup.label}
-                              count={refGroup.items.length}
+                              label="Pages"
+                              count={partnerPages.items.length}
                               expandKey={accordionExpandKey}
                               collapseKey={accordionCollapseKey}
                             >
-                              {isLocalizable(refGroup.items) && (
+                              {isLocalizable(partnerPages.items) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onNavigate(overviewPath);
+                                    onNavigate("/overview/partner/pages");
                                   }}
-                                  className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === overviewPath ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
+                                  className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/pages" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
                                 >
                                   <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
                                     <svg
@@ -1566,9 +1331,7 @@ export function AppSidebar({
                                   <span className="text-xs font-semibold flex-1 text-emerald-700">
                                     Translation overview
                                   </span>
-                                  {groupMissingMap[
-                                    `partner-${refGroup.slug}`
-                                  ] && (
+                                  {groupMissingMap["partner-pages"] && (
                                     <span
                                       title="Has missing translations"
                                       className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
@@ -1590,14 +1353,14 @@ export function AppSidebar({
                                 </button>
                               )}
                               <ul className="flex flex-col">
-                                {refGroup.items.map((item: any) => {
+                                {partnerPages.items.map((page: any) => {
                                   const active =
-                                    entryId === item.sys.id &&
+                                    entryId === page.sys.id &&
                                     !pathname.startsWith("/overview/");
                                   return (
-                                    <li key={item.sys.id}>
+                                    <li key={page.sys.id}>
                                       <button
-                                        onClick={() => onGoToEntry(item.sys.id)}
+                                        onClick={() => onGoToEntry(page.sys.id)}
                                         className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
                                       >
                                         <div className="min-w-0">
@@ -1605,12 +1368,12 @@ export function AppSidebar({
                                             className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                           >
                                             {getName(
-                                              item.fields,
+                                              page.fields,
                                               firstLocale,
-                                            ) ?? item.sys.id}
+                                            ) ?? page.sys.id}
                                           </p>
                                           <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
-                                            {item.sys.id}
+                                            {page.sys.id}
                                           </p>
                                         </div>
                                       </button>
@@ -1619,11 +1382,278 @@ export function AppSidebar({
                                 })}
                               </ul>
                             </AccordionSection>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
+                          )}
+
+                          {partnerMessages.items.length > 0 && (
+                            <AccordionSection
+                              label="Messages"
+                              count={partnerMessages.items.length}
+                              expandKey={accordionExpandKey}
+                              collapseKey={accordionCollapseKey}
+                            >
+                              {isLocalizable(partnerMessages.items) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onNavigate("/overview/partner/messages");
+                                  }}
+                                  className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/messages" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
+                                >
+                                  <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
+                                    <svg
+                                      className="w-3 h-3 text-emerald-500"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                      />
+                                    </svg>
+                                  </div>
+                                  <span className="text-xs font-semibold flex-1 text-emerald-700">
+                                    Translation overview
+                                  </span>
+                                  {groupMissingMap["partner-messages"] && (
+                                    <span
+                                      title="Has missing translations"
+                                      className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                    />
+                                  )}
+                                  <svg
+                                    className="w-3 h-3 text-emerald-400 shrink-0"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M9 5l7 7-7 7"
+                                    />
+                                  </svg>
+                                </button>
+                              )}
+                              <ul className="flex flex-col">
+                                {partnerMessages.items.map((msg: any) => {
+                                  const active =
+                                    entryId === msg.sys.id &&
+                                    !pathname.startsWith("/overview/");
+                                  return (
+                                    <li key={msg.sys.id}>
+                                      <button
+                                        onClick={() => onGoToEntry(msg.sys.id)}
+                                        className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                      >
+                                        <div className="min-w-0">
+                                          <p
+                                            className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                          >
+                                            {getName(msg.fields, firstLocale) ??
+                                              msg.sys.id}
+                                          </p>
+                                          <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                            {msg.sys.id}
+                                          </p>
+                                        </div>
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </AccordionSection>
+                          )}
+
+                          {partnerEmails.items.length > 0 && (
+                            <AccordionSection
+                              label="Emails"
+                              count={partnerEmails.items.length}
+                              expandKey={accordionExpandKey}
+                              collapseKey={accordionCollapseKey}
+                            >
+                              {isLocalizable(partnerEmails.items) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onNavigate("/overview/partner/emails");
+                                  }}
+                                  className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === "/overview/partner/emails" ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
+                                >
+                                  <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
+                                    <svg
+                                      className="w-3 h-3 text-emerald-500"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                      />
+                                    </svg>
+                                  </div>
+                                  <span className="text-xs font-semibold flex-1 text-emerald-700">
+                                    Translation overview
+                                  </span>
+                                  {groupMissingMap["partner-emails"] && (
+                                    <span
+                                      title="Has missing translations"
+                                      className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                    />
+                                  )}
+                                  <svg
+                                    className="w-3 h-3 text-emerald-400 shrink-0"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M9 5l7 7-7 7"
+                                    />
+                                  </svg>
+                                </button>
+                              )}
+                              <ul className="flex flex-col">
+                                {partnerEmails.items.map((email: any) => {
+                                  const active =
+                                    entryId === email.sys.id &&
+                                    !pathname.startsWith("/overview/");
+                                  return (
+                                    <li key={email.sys.id}>
+                                      <button
+                                        onClick={() =>
+                                          onGoToEntry(email.sys.id)
+                                        }
+                                        className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                      >
+                                        <div className="min-w-0">
+                                          <p
+                                            className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                          >
+                                            {getName(
+                                              email.fields,
+                                              firstLocale,
+                                            ) ?? email.sys.id}
+                                          </p>
+                                          <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                            {email.sys.id}
+                                          </p>
+                                        </div>
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </AccordionSection>
+                          )}
+
+                          {partnerRefGroups.map((refGroup) => {
+                            if (refGroup.items.length === 0) return null;
+                            const overviewPath = `/overview/partner/${refGroup.slug}`;
+                            return (
+                              <AccordionSection
+                                key={`ref-partner-${refGroup.contentTypeId}`}
+                                label={refGroup.label}
+                                count={refGroup.items.length}
+                                expandKey={accordionExpandKey}
+                                collapseKey={accordionCollapseKey}
+                              >
+                                {isLocalizable(refGroup.items) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onNavigate(overviewPath);
+                                    }}
+                                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 mb-2 rounded-lg border transition-all ${pathname === overviewPath ? "border-emerald-400/80 bg-emerald-500/15 shadow-sm" : "border-gray-200/60 hover:bg-gray-100 hover:border-gray-300"}`}
+                                  >
+                                    <div className="w-5 h-5 rounded-md border border-emerald-400/25 flex items-center justify-center shrink-0">
+                                      <svg
+                                        className="w-3 h-3 text-emerald-500"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                                        />
+                                      </svg>
+                                    </div>
+                                    <span className="text-xs font-semibold flex-1 text-emerald-700">
+                                      Translation overview
+                                    </span>
+                                    {groupMissingMap[
+                                      `partner-${refGroup.slug}`
+                                    ] && (
+                                      <span
+                                        title="Has missing translations"
+                                        className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                      />
+                                    )}
+                                    <svg
+                                      className="w-3 h-3 text-emerald-400 shrink-0"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      strokeWidth={2.5}
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M9 5l7 7-7 7"
+                                      />
+                                    </svg>
+                                  </button>
+                                )}
+                                <ul className="flex flex-col">
+                                  {refGroup.items.map((item: any) => {
+                                    const active =
+                                      entryId === item.sys.id &&
+                                      !pathname.startsWith("/overview/");
+                                    return (
+                                      <li key={item.sys.id}>
+                                        <button
+                                          onClick={() =>
+                                            onGoToEntry(item.sys.id)
+                                          }
+                                          className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-lg border-l-2 transition-colors ${active ? "border-blue-500 bg-blue-500/10" : "border-transparent hover:bg-gray-200/60"}`}
+                                        >
+                                          <div className="min-w-0">
+                                            <p
+                                              className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
+                                            >
+                                              {getName(
+                                                item.fields,
+                                                firstLocale,
+                                              ) ?? item.sys.id}
+                                            </p>
+                                            <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
+                                              {item.sys.id}
+                                            </p>
+                                          </div>
+                                        </button>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </AccordionSection>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>

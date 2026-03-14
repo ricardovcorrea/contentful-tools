@@ -77,6 +77,9 @@ function AssetCell({
 }) {
   const [asset, setAsset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const _pd = useRouteLoaderData("routes/home") as any;
+  const _spaceId: string = _pd?.spaceId ?? "";
+  const _envId: string = _pd?.environmentId ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -116,14 +119,45 @@ function AssetCell({
     );
   }
 
+  const _cfUrl =
+    _spaceId && _envId
+      ? `https://app.contentful.com/spaces/${_spaceId}/environments/${_envId}/assets/${assetId}`
+      : null;
+
   return (
     <div className="flex flex-col gap-1 py-0.5">
       {isImage && url && (
-        <img
-          src={url}
-          alt={typeof title === "string" ? title : assetId}
-          className="max-h-20 max-w-full rounded object-contain"
-        />
+        <div className="relative group">
+          <img
+            src={url}
+            alt={typeof title === "string" ? title : assetId}
+            className="max-h-20 max-w-full rounded object-contain"
+          />
+          {_cfUrl && (
+            <a
+              href={_cfUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Open in Contentful"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white rounded p-0.5 shadow-sm"
+            >
+              <svg
+                className="w-3 h-3 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </a>
+          )}
+        </div>
       )}
       <span className="text-xs text-gray-500">
         {typeof title === "string" ? title : assetId}
@@ -1060,12 +1094,14 @@ export default function OverviewPage() {
   const { scope, group } = useParams<{ scope: string; group?: string }>();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { editMode } = useEditMode();
   const parentData = useRouteLoaderData("routes/home") as ParentLoaderData;
 
   if (!parentData) return null;
 
   const {
     locales,
+    opcoPartners,
     opcoPages,
     opcoMessages,
     partnerPages,
@@ -1840,9 +1876,18 @@ export default function OverviewPage() {
                   onChange={handleImportCsv}
                 />
                 <button
-                  onClick={() => importInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-                  title="Import a CSV and review translation changes"
+                  onClick={() => editMode && importInputRef.current?.click()}
+                  disabled={!editMode}
+                  title={
+                    editMode
+                      ? "Import a CSV and review translation changes"
+                      : "Enable Edit mode to import"
+                  }
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-colors ${
+                    editMode
+                      ? "border-gray-300 text-gray-600 hover:bg-gray-200 hover:text-gray-900 cursor-pointer"
+                      : "border-gray-200 text-gray-300 cursor-not-allowed opacity-50"
+                  }`}
                 >
                   <svg
                     className="w-3.5 h-3.5 shrink-0"
@@ -1986,55 +2031,85 @@ export default function OverviewPage() {
 
             {showPartnerInOpco && (
               <>
-                <button
-                  onClick={() => setPartnerOpen((p) => !p)}
-                  className="w-full flex items-center gap-2 mt-4 mb-3 px-1 py-1 -mx-1 rounded-lg hover:bg-gray-200/50 transition-colors group"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="text-sm font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
-                    Partner — {partnerId}
-                  </span>
-                  <span className="text-xs text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
-                    {partnerGroups.reduce((a, g) => a + g.items.length, 0)}
-                  </span>
-                  <svg
-                    className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${
-                      partnerOpen ? "" : "-rotate-90"
-                    }`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
-                {partnerOpen &&
-                  sortByMissing(partnerGroups, "partner").map((group) => {
-                    if (group.items.length === 0) return null;
-                    const key = `partner-${group.slug}`;
-                    return (
-                      <GroupTable
-                        key={key}
-                        group={group}
-                        localeCodes={localeCodes}
-                        targetLocaleCodes={missingCheckCodes}
-                        firstLocale={firstLocale}
-                        navigate={navigate}
-                        spaceId={spaceId}
-                        environmentId={environmentId}
-                        expanded={isExpanded(key)}
-                        onToggle={() => toggleKey(key)}
-                        groupKey={key}
-                        onMissingResolved={handleMissingResolved}
-                        onFieldsResolved={handleFieldsResolved}
+                {opcoPartners.items.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => setPartnerOpen((p) => !p)}
+                      className="w-full flex items-center gap-2 mt-4 mb-3 px-1 py-1 -mx-1 rounded-lg hover:bg-gray-200/50 transition-colors group"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="text-sm font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
+                        Partner — {partnerId}
+                      </span>
+                      <span className="text-xs text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
+                        {partnerGroups.reduce((a, g) => a + g.items.length, 0)}
+                      </span>
+                      <svg
+                        className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${
+                          partnerOpen ? "" : "-rotate-90"
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
+                    {partnerOpen &&
+                      sortByMissing(partnerGroups, "partner").map((group) => {
+                        if (group.items.length === 0) return null;
+                        const key = `partner-${group.slug}`;
+                        return (
+                          <GroupTable
+                            key={key}
+                            group={group}
+                            localeCodes={localeCodes}
+                            targetLocaleCodes={missingCheckCodes}
+                            firstLocale={firstLocale}
+                            navigate={navigate}
+                            spaceId={spaceId}
+                            environmentId={environmentId}
+                            expanded={isExpanded(key)}
+                            onToggle={() => toggleKey(key)}
+                            groupKey={key}
+                            onMissingResolved={handleMissingResolved}
+                            onFieldsResolved={handleFieldsResolved}
+                          />
+                        );
+                      })}
+                  </>
+                ) : (
+                  <div className="mt-4 flex items-center gap-3 px-4 py-4 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/40 text-emerald-700">
+                    <svg
+                      className="w-5 h-5 shrink-0 text-emerald-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
                       />
-                    );
-                  })}
+                    </svg>
+                    <div>
+                      <p className="text-sm font-semibold">No partners yet</p>
+                      <p className="text-xs text-emerald-600 mt-0.5">
+                        Use the{" "}
+                        <span className="font-semibold">
+                          Create first partner
+                        </span>{" "}
+                        button in the header to add one.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </>
@@ -2102,11 +2177,20 @@ export default function OverviewPage() {
                       {selectedUnpublished.size > 0 && (
                         <button
                           onClick={() =>
+                            editMode &&
                             handlePublishSelected(
                               Array.from(selectedUnpublished),
                             )
                           }
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-semibold hover:bg-blue-600 transition-colors shadow-sm"
+                          disabled={!editMode}
+                          title={
+                            editMode ? undefined : "Enable Edit mode to publish"
+                          }
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
+                            editMode
+                              ? "bg-blue-500 text-white hover:bg-blue-600 cursor-pointer"
+                              : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-60"
+                          }`}
                         >
                           <svg
                             className="w-3.5 h-3.5 shrink-0"
@@ -2297,9 +2381,20 @@ export default function OverviewPage() {
                                     return (
                                       <button
                                         onClick={() =>
+                                          editMode &&
                                           handlePublishEntry(item.sys.id)
                                         }
-                                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-50 border border-red-200 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                                        disabled={!editMode}
+                                        title={
+                                          editMode
+                                            ? undefined
+                                            : "Enable Edit mode to publish"
+                                        }
+                                        className={`flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+                                          editMode
+                                            ? "bg-red-50 border-red-200 text-red-600 hover:bg-red-100 cursor-pointer"
+                                            : "bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed"
+                                        }`}
                                       >
                                         <svg
                                           className="w-3 h-3 shrink-0"
@@ -2347,9 +2442,20 @@ export default function OverviewPage() {
                                   return (
                                     <button
                                       onClick={() =>
+                                        editMode &&
                                         handlePublishEntry(item.sys.id)
                                       }
-                                      className="px-2.5 py-1 rounded-md border border-blue-300 bg-blue-50 text-xs font-medium text-blue-600 hover:bg-blue-100 transition-colors"
+                                      disabled={!editMode}
+                                      title={
+                                        editMode
+                                          ? undefined
+                                          : "Enable Edit mode to publish"
+                                      }
+                                      className={`px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+                                        editMode
+                                          ? "border-blue-300 bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer"
+                                          : "border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed"
+                                      }`}
                                     >
                                       Publish
                                     </button>

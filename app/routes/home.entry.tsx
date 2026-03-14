@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouteLoaderData } from "react-router";
 import { useToast } from "~/lib/toast";
+import { useEditMode } from "~/lib/edit-mode";
 import { resolveStringField } from "~/lib/resolve-string-field";
 import { getContentType } from "~/lib/contentful/get-content-type";
 import { getEntry } from "~/lib/contentful/get-entry";
@@ -212,6 +213,9 @@ function AssetThumbnail({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [alt, setAlt] = useState("");
+  const _pd = useRouteLoaderData("routes/home") as any;
+  const _spaceId: string = _pd?.spaceId ?? "";
+  const _envId: string = _pd?.environmentId ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -239,13 +243,42 @@ function AssetThumbnail({
 
   if (!url) return null;
 
+  const _cfUrl =
+    _spaceId && _envId
+      ? `https://app.contentful.com/spaces/${_spaceId}/environments/${_envId}/assets/${assetId}`
+      : null;
+
   return (
-    <div className="bg-gray-200/40 flex items-center justify-center p-2 border-b border-gray-300">
+    <div className="bg-gray-200/40 flex items-center justify-center p-2 border-b border-gray-300 relative group">
       <img
         src={url}
         alt={alt}
         className="max-h-32 max-w-full rounded object-contain"
       />
+      {_cfUrl && (
+        <a
+          href={_cfUrl}
+          target="_blank"
+          rel="noreferrer"
+          title="Open in Contentful"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white rounded p-0.5 shadow-sm"
+        >
+          <svg
+            className="w-3 h-3 text-gray-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            />
+          </svg>
+        </a>
+      )}
     </div>
   );
 }
@@ -253,6 +286,9 @@ function AssetThumbnail({
 function AssetCard({ assetId, locale }: { assetId: string; locale: string }) {
   const [asset, setAsset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const _pd = useRouteLoaderData("routes/home") as any;
+  const _spaceId: string = _pd?.spaceId ?? "";
+  const _envId: string = _pd?.environmentId ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -308,12 +344,36 @@ function AssetCard({ assetId, locale }: { assetId: string; locale: string }) {
         </span>
       </div>
       {isImage && url && (
-        <div className="border-t border-gray-300 p-2 bg-gray-200/30 flex items-center justify-center">
+        <div className="border-t border-gray-300 p-2 bg-gray-200/30 flex items-center justify-center relative group">
           <img
             src={url}
             alt={typeof title === "string" ? title : assetId}
             className="max-h-40 max-w-full rounded object-contain"
           />
+          {_spaceId && _envId && (
+            <a
+              href={`https://app.contentful.com/spaces/${_spaceId}/environments/${_envId}/assets/${assetId}`}
+              target="_blank"
+              rel="noreferrer"
+              title="Open in Contentful"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 hover:bg-white rounded p-0.5 shadow-sm"
+            >
+              <svg
+                className="w-3 h-3 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </a>
+          )}
         </div>
       )}
       {!isImage && url && (
@@ -549,6 +609,7 @@ function EditableCell({
   onSaved: (fieldKey: string, locale: string, value: any) => void;
 }) {
   const { addToast } = useToast();
+  const { editMode } = useEditMode();
   const isCellEditing =
     editingCell?.fieldKey === fieldKey && editingCell?.locale === locale;
   const [saving, setSaving] = useState(false);
@@ -588,8 +649,9 @@ function EditableCell({
     const boolVal = effectiveValue === true;
     return (
       <button
-        disabled={saving}
+        disabled={saving || !editMode}
         onClick={async () => {
+          if (!editMode) return;
           setSaving(true);
           setSaveError(null);
           try {
@@ -731,23 +793,35 @@ function EditableCell({
       tabIndex={0}
       role="button"
       onClick={() => {
+        if (!editMode) return;
         setEditingCell({ fieldKey, locale });
         setDraftValue(String(effectiveValue ?? ""));
       }}
       onKeyDown={(e) => {
+        if (!editMode) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           setEditingCell({ fieldKey, locale });
           setDraftValue(String(effectiveValue ?? ""));
         }
       }}
-      className="cursor-text group -mx-1 -my-0.5 px-1 py-0.5 rounded hover:bg-blue-50 hover:ring-1 hover:ring-blue-200 transition-colors min-h-6"
+      className={`group -mx-1 -my-0.5 px-1 py-0.5 rounded transition-colors min-h-6 ${
+        editMode
+          ? "cursor-text hover:bg-blue-50 hover:ring-1 hover:ring-blue-200"
+          : "cursor-default"
+      }`}
     >
       {effectiveValue === null ||
       effectiveValue === undefined ||
       effectiveValue === "" ? (
-        <span className="italic text-gray-300 group-hover:text-blue-400 text-sm">
-          \u2014 click to edit \u2014
+        <span
+          className={`italic text-sm ${
+            editMode
+              ? "text-gray-300 group-hover:text-blue-400"
+              : "text-gray-300"
+          }`}
+        >
+          {editMode ? "\u2014 click to edit \u2014" : "\u2014 empty \u2014"}
         </span>
       ) : (
         <span className="text-gray-700">{String(effectiveValue)}</span>

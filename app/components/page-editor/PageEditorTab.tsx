@@ -11,6 +11,7 @@ import { Editor, Frame, useNode, useEditor } from "@craftjs/core";
 import { getEntry } from "~/lib/contentful/get-entry";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
 import { useToast } from "~/lib/toast";
+import { useEditMode as useGlobalEditMode } from "~/lib/edit-mode";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -1901,6 +1902,7 @@ function EditorToolbar({
   fullscreen,
   onFullscreenToggle,
   onEditToggle,
+  editingEnabled,
 }: {
   pendingChanges: PendingChange[];
   onSaveClick: () => void;
@@ -1911,6 +1913,7 @@ function EditorToolbar({
   fullscreen: boolean;
   onFullscreenToggle: () => void;
   onEditToggle: () => void;
+  editingEnabled: boolean;
 }) {
   const editMode = useContext(EditModeContext);
   const hasChanges = pendingChanges.length > 0;
@@ -2022,12 +2025,19 @@ function EditorToolbar({
       )}
 
       {/* Edit toggle */}
-      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+      <label
+        className={`flex items-center gap-1.5 select-none ${
+          editingEnabled ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+        }`}
+        title={
+          editingEnabled ? undefined : "Enable Edit mode to reorder sections"
+        }
+      >
         <span className="text-xs text-gray-500">
           {editMode ? "Editing" : "Viewing"}
         </span>
         <div
-          onClick={onEditToggle}
+          onClick={() => editingEnabled && onEditToggle()}
           className={`relative w-9 h-5 rounded-full transition-colors ${editMode ? "bg-gray-700" : "bg-gray-300"}`}
         >
           <span
@@ -2056,6 +2066,13 @@ export function PageEditorTab({
     "properties",
   );
   const [editMode, setEditMode] = useState(false);
+  const { editMode: globalEditMode } = useGlobalEditMode();
+
+  // Reset local drag-edit mode whenever the global edit mode is turned off
+  useEffect(() => {
+    if (!globalEditMode) setEditMode(false);
+  }, [globalEditMode]);
+
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [showConfirm, setShowConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2221,6 +2238,7 @@ export function PageEditorTab({
               fullscreen={fullscreen}
               onFullscreenToggle={() => setFullscreen((f) => !f)}
               onEditToggle={() => setEditMode((m) => !m)}
+              editingEnabled={globalEditMode}
             />
 
             <div className="flex flex-1 overflow-hidden">
