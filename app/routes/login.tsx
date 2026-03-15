@@ -23,7 +23,13 @@ const FEATURES = [
     badgeText: "Overview",
     title: "Inline Translation Editing",
     description:
-      "Select an OPCO and partner from the sidebar, then open the Overview tab. Each row is a translatable field; each column is a locale. Click any cell to edit it inline. Press ⌘ Enter (or Ctrl Enter) to save directly to Contentful. Red or amber cells indicate empty or missing values.",
+      "Each row in the Overview is a translatable field; each column is a locale. Click any cell to edit it inline and save directly to Contentful without leaving the page. Red or amber cells highlight missing or empty values so nothing slips through.",
+    steps: [
+      "Select OPCO + partner from the left sidebar",
+      "Open the Overview tab",
+      "Click any cell to start editing inline",
+      "Press ⌘ Enter (or Ctrl Enter) to save to Contentful",
+    ],
     icon: "edit",
     illustration: "translation",
   },
@@ -35,7 +41,13 @@ const FEATURES = [
     badgeText: "Overview",
     title: "CSV Import & Export",
     description:
-      "From Overview, click Export CSV to download all field values for the current partner. Edit the file in any spreadsheet tool — one row per field, one column per locale. Import it back via Import CSV. A colour-coded diff shows every changed value before you commit. Deselect any row to skip it, then click Apply.",
+      "Export all field values for the active partner to a structured CSV — one row per field, one column per locale. Edit it in any spreadsheet app, then import it back. A colour-coded diff previews every changed value before you commit, and you can deselect rows to skip specific fields.",
+    steps: [
+      "Click Export CSV in the Overview toolbar",
+      "Edit translations in Excel, Google Sheets, or similar",
+      "Import the modified file back via Import CSV",
+      "Review the diff, deselect rows to skip, then Apply",
+    ],
     icon: "csv",
     illustration: "csv",
   },
@@ -47,7 +59,13 @@ const FEATURES = [
     badgeText: "Unpublished",
     title: "Unpublished Content",
     description:
-      "The Unpublished tab lists every entry where the draft version differs from what is currently published. Click Changes on any row to see a field-level diff. Select one or more entries and click Publish selected to push them live, or publish each entry individually from its row.",
+      "The Unpublished tab lists every entry in the active space where the draft version differs from what is currently live. See a field-level diff for each entry, then publish individual entries or batch-select and publish multiple at once.",
+    steps: [
+      "Open the Unpublished tab",
+      "Click Changes on any row for a field-level diff",
+      "Select one or more entries to batch publish",
+      "Or use the per-row Publish button for individual entries",
+    ],
     icon: "warning",
     illustration: "unpublished",
   },
@@ -59,7 +77,13 @@ const FEATURES = [
     badgeText: "Sidebar",
     title: "OPCO & Partner Context",
     description:
-      "The two dropdowns in the left sidebar set the active OPCO and partner. Changing either one reloads all scoped data — pages, messages, emails, reference entries — for that context. Your last selection is remembered across sessions. All content operations apply only to the currently active context.",
+      "The two dropdowns in the left sidebar define the active OPCO and partner scope. Changing either one reloads all scoped data — pages, messages, emails, reference entries — for that context instantly. Your last selection is remembered across sessions.",
+    steps: [
+      "Select an OPCO from the top sidebar dropdown",
+      "Select a partner to narrow the content scope",
+      "All views reload automatically for that context",
+      "Switch context at any time without signing out",
+    ],
     icon: "team",
     illustration: "opcos",
   },
@@ -71,7 +95,13 @@ const FEATURES = [
     badgeText: "Sitemap",
     title: "Page Sitemap",
     description:
-      "The Sitemap view shows the full page hierarchy for the active OPCO or partner as an expandable tree. Colour coding: green = published and up to date, amber = draft changes pending publish, grey = entry unpublished. Click any page row to open the full entry detail view.",
+      "The Sitemap view renders the full page hierarchy for the active OPCO or partner as an expandable tree. Colour coding gives you an instant health overview: green means published and up to date, amber means draft changes pending, grey means the entry is unpublished.",
+    steps: [
+      "Open the Sitemap tab",
+      "Expand nodes to browse the full page hierarchy",
+      "Green = live · Amber = draft pending · Grey = unpublished",
+      "Click any row to open the entry detail view",
+    ],
     icon: "map",
     illustration: "sitemap",
   },
@@ -83,7 +113,13 @@ const FEATURES = [
     badgeText: "Scheduled",
     title: "Scheduled Actions",
     description:
-      "Lists all publish and unpublish actions queued in Contentful for the current space and environment. Actions are grouped chronologically. Each row shows the scheduled time, action type, and the entry involved. Click an entry ID to open the entry detail view.",
+      "Lists all publish and unpublish actions queued in Contentful for the current space and environment, grouped chronologically. Each row shows the scheduled time, action type (publish or unpublish), and the entry involved. Click an entry ID to jump directly to its detail view.",
+    steps: [
+      "Open the Scheduled tab",
+      "Browse publish / unpublish actions grouped by time",
+      "Each row shows time, action type, and the entry",
+      "Click an entry ID to open its full detail view",
+    ],
     icon: "clock",
     illustration: "scheduled",
   },
@@ -887,21 +923,67 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-5xl mx-auto px-6 pt-16 pb-20 flex flex-col items-center text-center gap-7">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-gray-100 border border-gray-200 text-gray-500 text-[11px] font-semibold tracking-widest uppercase">
-            Internal tool · Avios content teams
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-blue-50 border border-blue-200 text-blue-600 text-[11px] font-semibold tracking-widest uppercase">
+            Avios Digital Vouchers · Internal tool
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 leading-tight max-w-3xl">
-            Avios Content Tools
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-tight max-w-3xl">
+            Manage Avios content{" "}
+            <span className="text-blue-600">at scale.</span>
           </h1>
 
-          <p className="text-sm sm:text-base text-gray-500 max-w-2xl leading-relaxed text-left">
-            A browser-based interface for content teams working with the Avios
-            OPCO and partner content model in Contentful. It lets you edit
-            translations inline, review and publish draft changes, inspect page
-            sitemaps, and export or import translations via CSV — all without
-            leaving the browser and without any server-side component.
+          <p className="text-sm sm:text-base text-gray-500 max-w-2xl leading-relaxed text-center">
+            A browser-based workspace built specifically for the{" "}
+            <strong className="text-gray-700">Avios Digital Vouchers</strong>{" "}
+            Contentful space. Inline translation editing, CSV round-trip
+            workflows, batch publishing, page sitemaps, and scheduled actions —
+            all talking directly to the Contentful Management API, entirely in
+            your browser, with no server in between.
           </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 max-w-2xl">
+            {[
+              "Inline editing",
+              "CSV round-trip",
+              "Batch publish",
+              "Page sitemaps",
+              "Scheduled actions",
+              "No backend",
+            ].map((cap) => (
+              <span
+                key={cap}
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 bg-white border border-gray-200 px-2.5 py-1 rounded-full shadow-sm"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0" />
+                {cap}
+              </span>
+            ))}
+          </div>
+
+          {/* Product scope notice */}
+          <div className="w-full max-w-2xl flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-left">
+            <svg
+              className="w-4 h-4 shrink-0 mt-0.5 text-amber-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <p className="text-xs text-amber-800 leading-relaxed">
+              <strong className="font-semibold">
+                Currently scoped to the Avios Digital Vouchers space.
+              </strong>{" "}
+              The content model, OPCO hierarchy, and partner structure this tool
+              understands are specific to the Digital Vouchers product.
+              Compatibility with other Avios OPCO spaces is not covered.
+            </p>
+          </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <button
@@ -950,6 +1032,120 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* How it works */}
+      <section className="max-w-5xl mx-auto px-6 py-20">
+        <div className="mb-12 text-center">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            How it works
+          </span>
+          <h2 className="mt-2 text-2xl font-extrabold text-gray-900">
+            Up and running in three steps
+          </h2>
+          <p className="mt-2 text-sm text-gray-500 max-w-xl mx-auto leading-relaxed">
+            No installation, no server setup. Just a Contentful CMA token and
+            you&apos;re editing content in seconds.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          {[
+            {
+              num: "01",
+              color: "bg-blue-600",
+              ring: "ring-blue-100",
+              title: "Connect your account",
+              iconPath:
+                "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z",
+              points: [
+                "Enter your Contentful CMA personal access token",
+                "Pick the Digital Vouchers Contentful space",
+                "Choose the environment (e.g. master or test)",
+                "Your session is saved and pre-filled on return visits",
+              ],
+            },
+            {
+              num: "02",
+              color: "bg-violet-600",
+              ring: "ring-violet-100",
+              title: "Pick your context",
+              iconPath:
+                "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
+              points: [
+                "Select an OPCO from the left sidebar",
+                "Select a partner to narrow the content scope",
+                "All views reload for that context automatically",
+                "Switch context at any time without signing out",
+              ],
+            },
+            {
+              num: "03",
+              color: "bg-emerald-600",
+              ring: "ring-emerald-100",
+              title: "Edit, publish & export",
+              iconPath: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+              points: [
+                "Edit translations inline in the Overview tab",
+                "Export to CSV, edit in a spreadsheet, import back",
+                "Review and publish unpublished drafts in one click",
+                "Inspect the live sitemap and upcoming scheduled actions",
+              ],
+            },
+          ].map((s) => (
+            <div
+              key={s.num}
+              className="relative flex flex-col gap-4 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center shrink-0 ring-4 ${s.ring} shadow-sm`}
+                >
+                  <svg
+                    className="w-5 h-5 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d={s.iconPath}
+                    />
+                  </svg>
+                </div>
+                <span className="text-2xl font-black text-gray-100 font-mono select-none">
+                  {s.num}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-gray-900">{s.title}</h3>
+              <ul className="flex flex-col gap-2">
+                {s.points.map((pt, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-xs text-gray-500"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0 mt-px text-gray-300"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                    {pt}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Key concepts */}
       <div className="border-y border-gray-100 bg-gray-50">
         <div className="max-w-5xl mx-auto px-6 py-8">
@@ -962,7 +1158,7 @@ export default function LandingPage() {
                 term: "OPCO",
                 color: "text-emerald-600",
                 bg: "bg-emerald-50 border-emerald-100",
-                def: "Operating company — the top-level scope (e.g. Avios, Iberia Plus). Every data request is scoped to the active OPCO. Selected from the left sidebar.",
+                def: "Operating company — the top-level organisational scope within the Digital Vouchers space (e.g. Avios, British Airways). Every data request is scoped to the active OPCO. Support for spaces with a different OPCO model is planned for later.",
               },
               {
                 term: "Partner",
@@ -1044,6 +1240,21 @@ export default function LandingPage() {
                 <p className="text-xs text-gray-500 leading-relaxed">
                   {f.description}
                 </p>
+                {f.steps && (
+                  <ol className="mt-1 flex flex-col gap-1.5 border-t border-gray-50 pt-3">
+                    {f.steps.map((step, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2 text-[11px] text-gray-500"
+                      >
+                        <span className="shrink-0 w-4 h-4 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500 mt-px">
+                          {i + 1}
+                        </span>
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                )}
               </div>
             </div>
           ))}
@@ -1062,9 +1273,12 @@ export default function LandingPage() {
             </h2>
             <p className="mt-2 text-sm text-gray-500 max-w-xl leading-relaxed">
               You need a valid Contentful Management API (CMA) personal access
-              token for the space that contains your OPCO and partner content.
-              No installation is required — the app runs entirely in the
-              browser.
+              token for the{" "}
+              <strong className="text-gray-700">Avios Digital Vouchers</strong>{" "}
+              Contentful space. No installation is required — the app runs
+              entirely in the browser. Note: this tool is currently built around
+              the Digital Vouchers content model; other OPCO spaces are not yet
+              supported.
             </p>
           </div>
 
@@ -1102,8 +1316,8 @@ export default function LandingPage() {
                     Click <strong className="text-gray-800">Sign in</strong>{" "}
                     above and paste your token. The tool validates it against
                     the Contentful API immediately. You will then pick a{" "}
-                    <strong className="text-gray-800">space</strong> (the
-                    Contentful space holding your OPCO/partner content) and an{" "}
+                    <strong className="text-gray-800">space</strong> (the Avios
+                    Digital Vouchers Contentful space) and an{" "}
                     <strong className="text-gray-800">environment</strong>{" "}
                     (usually
                     <code className="bg-gray-200 text-gray-700 text-[11px] px-1.5 py-0.5 rounded mx-1">

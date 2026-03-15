@@ -20,99 +20,162 @@ export function isTourSeen(): boolean {
 
 // ─── Style overrides to match the app’s design system ─────────────────────────────
 const TOUR_CSS = `
+/* == Popover shell ============================================================ */
 .driver-popover {
   font-family: inherit;
-  border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 20px 30px -8px rgba(0,0,0,.13), 0 6px 12px -4px rgba(0,0,0,.08);
+  border-radius: 18px;
+  border: 1px solid #dde3ef;
+  box-shadow:
+    0 40px 72px -16px rgba(15,23,42,.22),
+    0 16px 28px -8px rgba(15,23,42,.12),
+    0 0 0 1px rgba(255,255,255,.7) inset;
   padding: 0;
   overflow: hidden;
-  max-width: 300px;
-  min-width: 250px;
-  background: #fff;
+  max-width: 400px;
+  min-width: 340px;
+  background: #ffffff;
 }
+
+/* == Gradient accent strip ==================================================== */
+.driver-popover::before {
+  content: '';
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #2563eb 0%, #7c3aed 55%, #0ea5e9 100%);
+}
+
+/* == Title ==================================================================== */
 .driver-popover-title {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: #111827;
-  padding: 14px 36px 0 16px;
-  line-height: 1.35;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  padding: 20px 50px 0 22px;
+  line-height: 1.3;
   margin: 0;
+  letter-spacing: -0.015em;
 }
+
+/* == Body copy ================================================================ */
 .driver-popover-description {
-  font-size: 0.72rem;
-  color: #6b7280;
-  line-height: 1.65;
-  padding: 5px 16px 14px 16px;
+  font-size: 0.8125rem;
+  color: #475569;
+  line-height: 1.75;
+  padding: 8px 22px 22px 22px;
   margin: 0;
 }
+
+/* == Footer =================================================================== */
 .driver-popover-footer {
-  border-top: 1px solid #f3f4f6;
-  background: #f9fafb;
-  padding: 8px 10px;
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
 }
+
+/* == Progress pill ============================================================= */
+.driver-popover-progress-text {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #2563eb;
+  border-radius: 999px;
+  padding: 3px 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-right: auto;
+  line-height: 1.5;
+  box-shadow: 0 1px 4px rgba(37,99,235,.35);
+}
+
+/* == Nav button group ========================================================= */
+.driver-popover-navigation-btns {
+  gap: 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* == Back button =============================================================== */
 .driver-popover-prev-btn {
-  font-size: 0.7rem;
+  font-size: 0.775rem;
   font-weight: 600;
-  color: #6b7280;
-  background: transparent;
-  border: 1px solid #e5e7eb;
-  padding: 5px 10px;
-  border-radius: 8px;
+  color: #64748b;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  padding: 7px 15px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   line-height: 1;
+  white-space: nowrap;
 }
-.driver-popover-prev-btn:hover { background: #f3f4f6; color: #111827; }
+.driver-popover-prev-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+/* == Next / Done button ======================================================= */
 .driver-popover-next-btn,
 .driver-popover-done-btn {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #fff;
-  background: #2563eb;
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   border: none;
-  padding: 5px 12px;
-  border-radius: 8px;
+  padding: 8px 18px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s;
-  box-shadow: 0 1px 3px rgba(37,99,235,.3);
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 3px 10px rgba(37,99,235,.40), 0 1px 3px rgba(37,99,235,.25);
   line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 .driver-popover-next-btn:hover,
-.driver-popover-done-btn:hover { background: #1d4ed8; }
+.driver-popover-done-btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37,99,235,.45), 0 2px 4px rgba(37,99,235,.3);
+}
+.driver-popover-next-btn:active,
+.driver-popover-done-btn:active {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* == Close button ============================================================= */
 .driver-popover-close-btn {
-  font-size: 13px;
-  color: #9ca3af;
+  font-size: 14px;
+  color: #94a3b8;
   background: transparent;
   border: none;
-  padding: 4px;
+  padding: 0;
   cursor: pointer;
   position: absolute;
-  top: 9px;
-  right: 10px;
+  top: 14px;
+  right: 16px;
   line-height: 1;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: background 0.15s, color 0.15s;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.driver-popover-close-btn:hover { background: #f3f4f6; color: #374151; }
-.driver-popover-progress-text {
-  font-size: 0.6rem;
-  font-weight: 700;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-right: auto;
+.driver-popover-close-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
 }
-.driver-popover-navigation-btns { gap: 6px; display: flex; }
+
+/* == Backdrop ================================================================= */
+#driver-page-overlay {
+  background: rgba(15, 23, 42, 0.58) !important;
+  backdrop-filter: blur(2px);
+}
 `;
 
 // ─── Step definitions ───────────────────────────────────────────────────────────────
