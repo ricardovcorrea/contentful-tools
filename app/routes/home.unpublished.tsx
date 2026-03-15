@@ -608,45 +608,60 @@ export default function UnpublishedPage() {
 
       <div className="px-6 py-4">
         {visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
             {allUnpublished.filter(
               (u) => publishingEntries[u.item.sys.id] !== "done",
             ).length === 0 ? (
               <>
-                <svg
-                  className="w-10 h-10"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <p className="text-sm font-medium">All content is published</p>
-                <p className="text-xs">No draft or modified entries found</p>
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-emerald-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-gray-600">
+                    All content is published
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    No draft or modified entries found in this environment
+                  </p>
+                </div>
               </>
             ) : (
               <>
-                <svg
-                  className="w-10 h-10"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <p className="text-sm font-medium">
-                  No results match your search
-                </p>
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-amber-300"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-gray-600">
+                    No results match your search
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Try a different keyword or clear the search filter
+                  </p>
+                </div>
               </>
             )}
           </div>

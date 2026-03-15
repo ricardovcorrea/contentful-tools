@@ -242,21 +242,28 @@ export function SitemapSection({
   // ── Empty state ──
   if (allPages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-        <svg
-          className="w-10 h-10"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-        <p className="text-sm font-medium">No pages found</p>
+      <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
+        <div className="w-16 h-16 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+          <svg
+            className="w-8 h-8 text-sky-300"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-600">No pages found</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Select an OPCO or partner to explore their sitemap structure
+          </p>
+        </div>
       </div>
     );
   }
@@ -266,21 +273,30 @@ export function SitemapSection({
     q && includedPages.length === 0 && excludedPages.length === 0;
   if (noResults) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-        <svg
-          className="w-10 h-10"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-        <p className="text-sm font-medium">No pages match your search</p>
+      <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
+        <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
+          <svg
+            className="w-8 h-8 text-gray-300"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-600">
+            No pages match your search
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Try a different keyword or clear the search filter
+          </p>
+        </div>
       </div>
     );
   }

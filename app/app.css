@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html {
+  font-size: 115%;
+}
+
 @theme {
   --font-sans:
     "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",

@@ -2221,24 +2221,30 @@ export default function OverviewPage() {
         {activeTab === "unpublished" && (
           <>
             {filteredUnpublishedItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-                <svg
-                  className="w-10 h-10"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <p className="text-sm font-medium">All entries are published</p>
-                <p className="text-xs">
-                  No draft or modified entries found in this view
-                </p>
+              <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-emerald-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-gray-600">
+                    All entries are published
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    No draft or modified entries found in this view
+                  </p>
+                </div>
               </div>
             ) : (
               (() => {
@@ -2719,21 +2725,31 @@ export default function OverviewPage() {
             {/* Modal body */}
             <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-2">
               {diffRows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
-                  <svg
-                    className="w-10 h-10"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <p className="text-sm">All translations are up to date</p>
+                <div className="flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                    <svg
+                      className="w-7 h-7 text-emerald-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-600">
+                      All translations are up to date
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      No differences found between the snapshot and current
+                      values
+                    </p>
+                  </div>
                 </div>
               ) : (
                 (() => {

@@ -86,21 +86,30 @@ export default function LocalesPage() {
       {/* Content */}
       <div className="px-6 sm:px-8 py-6">
         {visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-            <svg
-              className="w-10 h-10"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0 0c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 18c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3M3.5 9h17M3.5 15h17"
-              />
-            </svg>
-            <p className="text-sm font-medium">No locales found</p>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
+            <div className="w-16 h-16 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+              <svg
+                className="w-8 h-8 text-sky-300"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0 0c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 18c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3M3.5 9h17M3.5 15h17"
+                />
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-600">
+                No locales found
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                This environment has no locales configured yet
+              </p>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">

@@ -281,38 +281,56 @@ export default function ScheduledPage() {
 
       <div className="p-6 sm:p-8">
         {total === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-            <svg
-              className="w-10 h-10"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <p className="text-sm font-medium">No scheduled actions</p>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
+            <div className="w-16 h-16 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center">
+              <svg
+                className="w-8 h-8 text-violet-300"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-600">
+                No scheduled actions
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Entries queued for publish or unpublish will appear here
+              </p>
+            </div>
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-            <svg
-              className="w-10 h-10"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            <p className="text-sm font-medium">No results match your search</p>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
+            <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
+              <svg
+                className="w-8 h-8 text-gray-300"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-600">
+                No results match your search
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Try a different keyword or clear the search filter
+              </p>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">

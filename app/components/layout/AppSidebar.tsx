@@ -400,6 +400,38 @@ export function AppSidebar({
                   </span>
                 </button>
                 <button
+                  onClick={() => {
+                    onNavigate("/locales");
+                  }}
+                  className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    localeActive
+                      ? "bg-sky-500/20 text-sky-700"
+                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
+                  }`}
+                >
+                  <div className="relative">
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                      />
+                    </svg>
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-sky-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {locales.items.length > 99 ? "99+" : locales.items.length}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-semibold leading-none">
+                    Locales
+                  </span>
+                </button>
+                <button
                   onClick={() => onNavigate("/unpublished")}
                   className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
                     pathname === "/unpublished"
@@ -463,38 +495,6 @@ export function AppSidebar({
                     Sched
                   </span>
                 </button>
-                <button
-                  onClick={() => {
-                    onNavigate("/locales");
-                  }}
-                  className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
-                    localeActive
-                      ? "bg-sky-500/20 text-sky-700"
-                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
-                  }`}
-                >
-                  <div className="relative">
-                    <svg
-                      className="w-3.5 h-3.5 shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                      />
-                    </svg>
-                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-sky-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
-                      {locales.items.length > 99 ? "99+" : locales.items.length}
-                    </span>
-                  </div>
-                  <span className="text-[9px] font-semibold leading-none">
-                    Locales
-                  </span>
-                </button>
               </div>
             </div>
 
@@ -506,6 +506,13 @@ export function AppSidebar({
                 Translations
               </p>
               <div className="flex flex-col gap-0.5">
+                {!opcoHasLocalizable && !partnerHasLocalizable && (
+                  <span className="w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md text-gray-300 cursor-default select-none">
+                    <span className="text-[9px] font-semibold leading-none italic">
+                      (empty)
+                    </span>
+                  </span>
+                )}
                 {opcoHasLocalizable && (
                   <button
                     onClick={() => {
@@ -905,6 +912,38 @@ export function AppSidebar({
                     </span>
                   </button>
 
+                  {/* Locales */}
+                  <button
+                    onClick={() => onNavigate("/locales")}
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
+                      localeActive
+                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
+                      <svg
+                        className="w-3 h-3 text-sky-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600 flex-1">
+                      Locales
+                    </span>
+                    <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-sky-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {locales.items.length > 99 ? "99+" : locales.items.length}
+                    </span>
+                  </button>
+
                   {/* Unpublished */}
                   <button
                     data-tour="nav-unpublished"
@@ -973,37 +1012,6 @@ export function AppSidebar({
                         : (scheduledCount ?? 0)}
                     </span>
                   </button>
-
-                  <button
-                    onClick={() => onNavigate("/locales")}
-                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
-                      localeActive
-                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
-                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                    }`}
-                  >
-                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
-                      <svg
-                        className="w-3 h-3 text-sky-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                        />
-                      </svg>
-                    </div>
-                    <span className="text-xs font-semibold text-gray-600 flex-1">
-                      Locales
-                    </span>
-                    <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-sky-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
-                      {locales.items.length > 99 ? "99+" : locales.items.length}
-                    </span>
-                  </button>
                 </>
               )}
             </div>
@@ -1055,6 +1063,13 @@ export function AppSidebar({
 
               {translationsExpanded && (
                 <>
+                  {!opcoHasLocalizable && !partnerHasLocalizable && (
+                    <div className="px-2.5 py-2 border-l-2 border-transparent">
+                      <span className="text-[10px] text-gray-300 italic select-none">
+                        (empty)
+                      </span>
+                    </div>
+                  )}
                   {opcoHasLocalizable && (
                     <button
                       onClick={() => onNavigate("/overview/opco")}

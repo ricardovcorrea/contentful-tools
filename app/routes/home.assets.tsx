@@ -356,23 +356,32 @@ export default function AssetsPage() {
 
         {/* Empty */}
         {!loading && !error && visibleAssets.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-            <svg
-              className="w-10 h-10"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            <p className="text-sm font-medium">
-              {search ? "No assets match your search" : "No assets found"}
-            </p>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
+            <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
+              <svg
+                className="w-8 h-8 text-gray-300"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-600">
+                {search ? "No assets match your search" : "No assets found"}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {search
+                  ? "Try a different keyword or clear the search filter"
+                  : "Assets uploaded to this environment will appear here"}
+              </p>
+            </div>
           </div>
         )}
 
