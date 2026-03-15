@@ -166,9 +166,9 @@ function TranslationCoverageCard({
       : 100;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
       {/* Card header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50/60">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50/60 shrink-0">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
           Translation Coverage
         </p>
@@ -177,7 +177,7 @@ function TranslationCoverageCard({
         </span>
       </div>
 
-      <div className="px-4 py-4 flex flex-col gap-3">
+      <div className="px-4 py-4 flex flex-col gap-3 flex-1">
         {/* Summary counters */}
         <div className="grid grid-cols-3 gap-1.5">
           <div className="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
@@ -735,6 +735,200 @@ function UnpublishedCard({
   );
 }
 
+// ── Content Freshness Card ────────────────────────────────────────────────────
+
+function ContentFreshnessCard({
+  entries,
+  opcoName,
+  partnerName,
+}: {
+  entries: any[];
+  opcoName: string;
+  partnerName: string;
+}) {
+  const now = Date.now();
+  const DAY = 86_400_000;
+
+  let today = 0;
+  let week = 0;
+  let month = 0;
+  let older = 0;
+  let mostRecentTs = 0;
+
+  for (const entry of entries) {
+    const ts = entry.sys?.updatedAt
+      ? new Date(entry.sys.updatedAt).getTime()
+      : 0;
+    if (ts > mostRecentTs) mostRecentTs = ts;
+    const age = now - ts;
+    if (age < DAY) today++;
+    else if (age < 7 * DAY) week++;
+    else if (age < 30 * DAY) month++;
+    else older++;
+  }
+
+  const total = entries.length;
+  const mostRecentDate = mostRecentTs
+    ? new Date(mostRecentTs).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+
+  type Band = {
+    label: string;
+    value: number;
+    bar: string;
+    text: string;
+    bg: string;
+    border: string;
+  };
+  const bands: Band[] = [
+    {
+      label: "Today",
+      value: today,
+      bar: "bg-emerald-400",
+      text: "text-emerald-700",
+      bg: "bg-emerald-50",
+      border: "border-emerald-100",
+    },
+    {
+      label: "Last 7 days",
+      value: week,
+      bar: "bg-sky-400",
+      text: "text-sky-700",
+      bg: "bg-sky-50",
+      border: "border-sky-100",
+    },
+    {
+      label: "Last 30 days",
+      value: month,
+      bar: "bg-amber-400",
+      text: "text-amber-700",
+      bg: "bg-amber-50",
+      border: "border-amber-100",
+    },
+    {
+      label: "Older",
+      value: older,
+      bar: "bg-gray-300",
+      text: "text-gray-500",
+      bg: "bg-gray-50",
+      border: "border-gray-100",
+    },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50/60">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+          Content Freshness
+        </p>
+        {total > 0 && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200/60">
+            {total}
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      {total === 0 ? (
+        <div className="flex flex-col items-center justify-center flex-1 py-10 gap-2 text-gray-400">
+          <svg
+            className="w-7 h-7"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <p className="text-xs font-medium">No entries found</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 px-5 py-4 flex-1">
+          {/* Most recent update */}
+          {mostRecentDate && (
+            <div className="flex items-end gap-3">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400 mb-0.5">
+                  Last updated
+                </p>
+                <p className="text-lg font-extrabold text-gray-800 leading-none">
+                  {mostRecentDate}
+                </p>
+              </div>
+              <span className="text-xs text-gray-400 mb-0.5">
+                across {opcoName} &amp; {partnerName}
+              </span>
+            </div>
+          )}
+
+          {/* Age bands */}
+          <div className="flex flex-col gap-2">
+            {bands.map((b) => (
+              <div key={b.label} className="flex items-center gap-2.5">
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-gray-500">
+                      {b.label}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold tabular-nums ${b.text}`}
+                    >
+                      {b.value}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${b.bar} transition-all`}
+                      style={{
+                        width:
+                          total > 0
+                            ? `${Math.round((b.value / total) * 100)}%`
+                            : "0%",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Active entries badge row */}
+          <div className="flex gap-2 flex-wrap">
+            {today + week > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                <span className="font-bold">{today + week}</span> updated this
+                week
+              </span>
+            )}
+            {older > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200/60">
+                <span className="font-bold">{older}</span> not touched in 30d+
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/60 mt-auto">
+        <p className="text-[10px] text-gray-400">
+          Based on <span className="font-semibold">{total}</span> entries scoped
+          to {opcoName}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function EnvironmentOverview() {
@@ -904,7 +1098,7 @@ export default function EnvironmentOverview() {
         </div>
       </div>
 
-      {/* Row 2: translation coverage */}
+      {/* Row 2: translation coverage + content freshness */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
         <TranslationCoverageCard
           entryCount={allEntries.length}
@@ -921,6 +1115,11 @@ export default function EnvironmentOverview() {
           }
           opcoHasLocalizable={opcoHasLocalizable}
           partnerHasLocalizable={partnerHasLocalizable}
+          opcoName={opcoName}
+          partnerName={partnerName}
+        />
+        <ContentFreshnessCard
+          entries={allEntries}
           opcoName={opcoName}
           partnerName={partnerName}
         />

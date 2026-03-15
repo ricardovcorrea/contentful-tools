@@ -1,4 +1,12 @@
+.git
+.gitignore
+.dockerignore
+.vscode
 .react-router
 build
 node_modules
+*.log
+.env
+.env.*
 README.md
+docker-compose.yml

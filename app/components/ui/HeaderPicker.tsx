@@ -56,7 +56,7 @@ export function HeaderPicker({
       <button
         onClick={() => canSwitch && setOpen((p) => !p)}
         disabled={disabled}
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all duration-150 ${
+        className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-all duration-150 ${
           disabled
             ? "opacity-50 cursor-wait border-gray-200 bg-gray-100"
             : open
@@ -81,17 +81,21 @@ export function HeaderPicker({
             </svg>
           </span>
         ) : (
-          <LogoAvatar
-            assetId={selected?.imageAssetId}
-            fallback={initials(selected?.label ?? value)}
-            className="w-5 h-5 rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-white text-gray-500"
-          />
+          /* Logo — bare wide image at natural aspect ratio, or initials pill */
+          <div className="flex items-center shrink-0" style={{ height: 28 }}>
+            <LogoAvatar
+              assetId={selected?.imageAssetId}
+              fallback={initials(selected?.label ?? value)}
+              className="rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-white text-gray-500"
+              size={28}
+            />
+          </div>
         )}
         <div className="text-left min-w-0">
           <p className="text-[8px] font-semibold uppercase tracking-widest leading-none mb-0.5 text-gray-400">
             {label}
           </p>
-          <p className="text-xs font-semibold truncate leading-tight text-gray-700">
+          <p className="text-[11px] font-semibold truncate leading-tight text-gray-600 max-w-28">
             {isEmpty ? `No ${label.toLowerCase()}` : (selected?.label ?? value)}
           </p>
         </div>
@@ -138,7 +142,8 @@ export function HeaderPicker({
                   <LogoAvatar
                     assetId={opt.imageAssetId}
                     fallback={initials(opt.label)}
-                    className="w-5 h-5 rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-gray-100 text-gray-500"
+                    className="rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-gray-100 text-gray-500"
+                    size={22}
                   />
                   <span className="flex-1 text-sm font-medium truncate">
                     {opt.label}

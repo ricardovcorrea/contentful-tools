@@ -9,7 +9,6 @@ import { resolveImageUrl } from "~/lib/format";
 import { getEntry, invalidateEntry } from "~/lib/contentful/get-entry";
 import { queryKeys } from "~/lib/query-keys";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
-import { clearCache } from "~/lib/contentful/cache";
 import { resolveStringField } from "~/lib/resolve-string-field";
 import {
   isRichText,
@@ -1190,7 +1189,7 @@ export default function OverviewPage() {
           .map((g) => `partner-${g.slug}`)
       : []),
   ];
-  const autoExpand = true;
+  const autoExpand = false;
 
   // Section-level accordion (OPCO / Partner banners)
   const [opcoOpen, setOpcoOpen] = useState(autoExpand);
@@ -1448,17 +1447,50 @@ export default function OverviewPage() {
     [opcoGroups, partnerGroups],
   );
 
+  /** Publish one entry with retry/verification (mirrors home.unpublished.tsx).
+   *  The Contentful SDK sometimes throws even when the publish succeeds due to
+   *  response-parsing races or CDN 502s.  We re-check up to 5 times. */
+  const publishEntryRobust = useCallback(
+    async (entryId: string): Promise<any> => {
+      const environment = await getContentfulManagementEnvironment();
+      const entry = await environment.getEntry(entryId);
+      const initialPv = entry.sys?.publishedVersion ?? -1;
+      const attemptedAt = Date.now();
+      try {
+        const result = await entry.publish();
+        return result?.sys ?? result;
+      } catch (publishErr) {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const wait = attempt < 2 ? 2000 : attempt < 4 ? 3000 : 4000;
+          await new Promise((r) => setTimeout(r, wait));
+          try {
+            const rechecked = await environment.getEntry(entryId);
+            const pv = rechecked.sys?.publishedVersion ?? -1;
+            const publishedAt = rechecked.sys?.publishedAt
+              ? new Date(rechecked.sys.publishedAt).getTime()
+              : 0;
+            if (pv > initialPv || publishedAt >= attemptedAt - 5_000) {
+              return rechecked.sys;
+            }
+          } catch {
+            // re-check network error — keep retrying
+          }
+        }
+        throw publishErr;
+      }
+    },
+    [],
+  );
+
   const handlePublishEntry = useCallback(
     async (entryId: string) => {
       setPublishingEntries((prev) => ({ ...prev, [entryId]: "loading" }));
       try {
-        const environment = await getContentfulManagementEnvironment();
-        const entry = await environment.getEntry(entryId);
-        const published = await entry.publish();
+        const publishedSys = await publishEntryRobust(entryId);
         // Mutate cached item sys so filteredUnpublishedItems stops including it.
         const cached = findCachedItem(entryId);
-        if (cached && published?.sys) {
-          Object.assign(cached.sys, published.sys);
+        if (cached && publishedSys) {
+          Object.assign(cached.sys, publishedSys);
         }
         setPublishingEntries((prev) => ({ ...prev, [entryId]: "done" }));
         addToast("Entry published successfully", "success");
@@ -1467,7 +1499,7 @@ export default function OverviewPage() {
         setPublishingEntries((prev) => ({ ...prev, [entryId]: "error" }));
       }
     },
-    [findCachedItem, addToast],
+    [findCachedItem, addToast, publishEntryRobust],
   );
 
   const handlePublishSelected = useCallback(
@@ -1483,13 +1515,11 @@ export default function OverviewPage() {
       await Promise.all(
         ids.map(async (entryId) => {
           try {
-            const environment = await getContentfulManagementEnvironment();
-            const entry = await environment.getEntry(entryId);
-            const published = await entry.publish();
+            const publishedSys = await publishEntryRobust(entryId);
             // Mutate cached item sys so filteredUnpublishedItems stops including it.
             const cached = findCachedItem(entryId);
-            if (cached && published?.sys) {
-              Object.assign(cached.sys, published.sys);
+            if (cached && publishedSys) {
+              Object.assign(cached.sys, publishedSys);
             }
             setPublishingEntries((prev) => ({ ...prev, [entryId]: "done" }));
             successCount++;
@@ -1589,6 +1619,25 @@ export default function OverviewPage() {
             }
           }
           const updated = await cfEntry.update();
+          // Patch the in-memory raw item so the table reflects the new
+          // values immediately without a full page reload.
+          const cachedRaw = findCachedItem(entry.entryId);
+          if (cachedRaw) {
+            for (const [field, locales] of Object.entries(entry.fields)) {
+              cachedRaw.fields[field] ??= {};
+              for (const [locale, value] of Object.entries(locales)) {
+                const existing = cachedRaw.fields[field]?.[locale];
+                cachedRaw.fields[field][locale] = isRichText(existing)
+                  ? wrapAsRichText(value)
+                  : value;
+              }
+            }
+            if (updated?.sys) Object.assign(cachedRaw.sys, updated.sys);
+          }
+          // Invalidate the individual entry query so background refetch picks up truth.
+          queryClientInstance.invalidateQueries({
+            queryKey: queryKeys.entry(entry.entryId, opcoId, partnerId),
+          });
           // ───────────────────────────────────────────────────────────────
           setEntryStatus(entry.entryId, "success");
           applySuccess++;
@@ -1613,9 +1662,38 @@ export default function OverviewPage() {
       addToast(`${applySuccess} imported, ${applyError} failed`, "info");
     }
 
-    // Invalidate cache so next load fetches fresh data from Contentful
-    clearCache();
-  }, [acceptedKeys, diffRows, addToast]);
+    // Invalidate group-level queries so the next navigation/background
+    // refetch pulls fresh data — without wiping the whole cache.
+    queryClientInstance.invalidateQueries({
+      queryKey: queryKeys.opcoPages(opcoId),
+    });
+    queryClientInstance.invalidateQueries({
+      queryKey: queryKeys.opcoMessages(opcoId),
+    });
+    queryClientInstance.invalidateQueries({
+      queryKey: queryKeys.opcoRefs(opcoId),
+    });
+    queryClientInstance.invalidateQueries({
+      queryKey: queryKeys.partnerPages(opcoId, partnerId),
+    });
+    queryClientInstance.invalidateQueries({
+      queryKey: queryKeys.partnerMessages(opcoId, partnerId),
+    });
+    queryClientInstance.invalidateQueries({
+      queryKey: queryKeys.partnerEmails(opcoId, partnerId),
+    });
+    queryClientInstance.invalidateQueries({
+      queryKey: queryKeys.partnerRefs(opcoId, partnerId),
+    });
+  }, [
+    acceptedKeys,
+    diffRows,
+    addToast,
+    findCachedItem,
+    queryClientInstance,
+    opcoId,
+    partnerId,
+  ]);
 
   const handleImportCsv = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2975,11 +3053,10 @@ export default function OverviewPage() {
                       onClick={() => {
                         setApplyProgressOpen(false);
                         setDiffOpen(false);
-                        navigate(0);
                       }}
                       className="ml-auto px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-700 transition-colors"
                     >
-                      {errors === 0 ? "Done & Reload" : "Close & Reload"}
+                      {errors === 0 ? "Done" : "Close"}
                     </button>
                   )}
                 </div>

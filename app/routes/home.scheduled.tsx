@@ -234,51 +234,49 @@ export default function ScheduledPage() {
         </div>
 
         {/* Filters + search */}
-        {total > 0 && (
-          <div className="flex items-center gap-2 flex-wrap pb-3">
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[10px] font-semibold">
-              {(["all", "publish", "unpublish"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`px-2.5 py-1 transition-colors capitalize ${
-                    filter === f
-                      ? "bg-gray-800 text-white"
-                      : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  {f === "all"
-                    ? `All (${total})`
-                    : f === "publish"
-                      ? `Publish (${publishCount})`
-                      : `Unpublish (${unpublishCount})`}
-                </button>
-              ))}
-            </div>
-            <div className="relative flex-1 min-w-45 max-w-xs">
-              <svg
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
+        <div className="flex items-center gap-2 flex-wrap pb-3">
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[10px] font-semibold">
+            {(["all", "publish", "unpublish"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-2.5 py-1 transition-colors capitalize ${
+                  filter === f
+                    ? "bg-gray-800 text-white"
+                    : "bg-white text-gray-500 hover:bg-gray-50"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search entries…"
-                className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-sky-400"
-              />
-            </div>
+                {f === "all"
+                  ? `All (${total})`
+                  : f === "publish"
+                    ? `Publish (${publishCount})`
+                    : `Unpublish (${unpublishCount})`}
+              </button>
+            ))}
           </div>
-        )}
+          <div className="relative flex-1 min-w-45 max-w-xs">
+            <svg
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search entries…"
+              className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-sky-400"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="p-6 sm:p-8">

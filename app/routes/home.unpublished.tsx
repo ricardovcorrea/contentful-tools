@@ -268,26 +268,36 @@ export default function UnpublishedPage() {
   const publishEntry = useCallback(async (entryId: string): Promise<any> => {
     const env = await getContentfulManagementEnvironment();
     const mgmtEntry = await env.getEntry(entryId);
+    // Snapshot the pre-publish publishedVersion so we can detect advancement.
+    const initialPv = mgmtEntry.sys?.publishedVersion ?? -1;
     const attemptedAt = Date.now();
     try {
       const result = await mgmtEntry.publish();
       return result?.sys ?? result;
     } catch (publishErr) {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        // Back-off: 1 s, 2 s, 3 s — gives Contentful time to propagate.
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      // The Contentful SDK sometimes throws even when the publish succeeds
+      // (response-parsing race, 502 from CDN, etc.).  Re-check up to 5 times
+      // with increasing back-off to let the Management API propagate.
+      //
+      // "Success" criteria (either is sufficient):
+      //   1. publishedVersion advanced past the pre-publish snapshot.
+      //   2. publishedAt is a timestamp that post-dates our attempt start
+      //      (5 s tolerance for server/client clock drift).
+      for (let attempt = 0; attempt < 5; attempt++) {
+        // Back-off: 2 s, 2 s, 3 s, 3 s, 4 s
+        const wait = attempt < 2 ? 2000 : attempt < 4 ? 3000 : 4000;
+        await new Promise((r) => setTimeout(r, wait));
         try {
           const rechecked = await env.getEntry(entryId);
           const pv = rechecked.sys?.publishedVersion ?? -1;
-          const v = rechecked.sys?.version ?? 0;
           const publishedAt = rechecked.sys?.publishedAt
             ? new Date(rechecked.sys.publishedAt).getTime()
             : 0;
-          // publishedVersion >= version - 1: the current (or previous) version
-          // is published. The version number increments on publish so we allow
-          // one step of drift.
-          // publishedAt >= attemptedAt - 60_000: fresh timestamp fallback.
-          if (pv >= v - 1 || publishedAt >= attemptedAt - 60_000) {
+          // publishedVersion advanced: the publish definitely went through.
+          // publishedAt >= attemptedAt - 5_000: published right around when
+          // we attempted (handles entries that were never published before,
+          // or when the version is temporarily stale on the read replica).
+          if (pv > initialPv || publishedAt >= attemptedAt - 5_000) {
             return rechecked.sys;
           }
         } catch {

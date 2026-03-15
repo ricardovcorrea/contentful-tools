@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   getContentfulManagementEntries,
   getContentfulManagementEnvironment,
 } from "~/lib/contentful";
 import { queryClient } from "~/lib/query-client";
 import { queryKeys } from "~/lib/query-keys";
+import { QUERY_STALE_TIME } from "~/lib/query-client";
 import { buildSitemapPages, type SitemapPage } from "~/lib/contentful/sitemap";
 import { POSITIVE_SITEMAP_FIELDS } from "./sitemap/SitemapToggle";
 import { PageRow } from "./sitemap/PageRow";
@@ -60,9 +62,38 @@ export function SitemapSection({
   editMode?: boolean;
 }) {
   const [allPages, setAllPages] = useState<SitemapPage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+
+  // ── Fetch partner pages via React Query (cached/persisted) ────────────────
+  const partnerSysIds = opcoPartners.items.map((p: any) => p.sys.id);
+  const {
+    data: partnerPageItems,
+    isLoading,
+    error: fetchError,
+  } = useQuery({
+    queryKey: queryKeys.sitemapPartnerPages(opcoId),
+    queryFn: async () => {
+      if (partnerSysIds.length === 0) return [] as any[];
+      const res = await getContentfulManagementEntries({
+        content_type: "page",
+        "fields.partner.sys.id[in]": partnerSysIds.join(","),
+        limit: 1000,
+      });
+      return res.items;
+    },
+    staleTime: QUERY_STALE_TIME,
+  });
+
+  const error = fetchError
+    ? ((fetchError as any)?.message ?? "Failed to load partner pages")
+    : null;
+
+  // Rebuild the page list whenever cached partner data or opco pages change.
+  useEffect(() => {
+    if (partnerPageItems === undefined) return;
+    const combined = [...opcoPages.items, ...partnerPageItems];
+    setAllPages(buildSitemapPages(combined, firstLocale, opcoName));
+  }, [partnerPageItems, opcoPages, firstLocale, opcoName]);
 
   const handleToggle = async (page: SitemapPage, newIncluded: boolean) => {
     if (pendingIds.has(page.sysId) || !page.sitemapField) return;
@@ -98,6 +129,9 @@ export function SitemapSection({
       queryClient.invalidateQueries({
         queryKey: queryKeys.opcoMessages(opcoId),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.sitemapPartnerPages(opcoId),
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.opcoRefs(opcoId) });
       queryClient.invalidateQueries({
         queryKey: queryKeys.partnerPages(opcoId, partnerId),
@@ -128,42 +162,6 @@ export function SitemapSection({
       });
     }
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    const partnerSysIds = opcoPartners.items.map((p: any) => p.sys.id);
-
-    const partnerPagePromise =
-      partnerSysIds.length > 0
-        ? getContentfulManagementEntries({
-            content_type: "page",
-            "fields.partner.sys.id[in]": partnerSysIds.join(","),
-            limit: 1000,
-          }).then((res) => res.items)
-        : Promise.resolve([] as any[]);
-
-    partnerPagePromise
-      .then((partnerItems) => {
-        if (cancelled) return;
-        const combined = [...opcoPages.items, ...partnerItems];
-        setAllPages(buildSitemapPages(combined, firstLocale, opcoName));
-      })
-      .catch((e: any) => {
-        if (cancelled) return;
-        setError(e?.message ?? "Failed to load partner pages");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firstLocale, opcoPages, opcoPartners, opcoName]);
 
   const q = search.trim().toLowerCase();
 
@@ -204,7 +202,7 @@ export function SitemapSection({
   const showExcluded = filterType === "all" || filterType === "excluded";
 
   // ── Loading state ── (skeleton rows)
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-4">
         {[12, 8].map((count, gi) => (

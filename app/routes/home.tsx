@@ -5,11 +5,15 @@ import { useState, useEffect, useRef } from "react";
 import { AppHeader } from "~/components/layout/AppHeader";
 import { AppSidebar } from "~/components/layout/AppSidebar";
 import { AppFooter } from "~/components/layout/AppFooter";
+import { OnboardingTour, isTourSeen } from "~/components/layout/OnboardingTour";
 import { ToastProvider } from "~/lib/toast";
 import { useEditMode } from "~/lib/edit-mode";
 import {
   dispatchLoadStep,
   dispatchLoadComplete,
+  resetLoadStep,
+  dispatchNavLoadingStart,
+  NAV_LOADING_EVENT,
   LoadingScreen,
 } from "~/components/loading-screen";
 import {
@@ -63,6 +67,10 @@ export function meta({}: Route.MetaArgs) {
  * For all other navigations (e.g. moving between sub-pages) skip the reload
  * since TanStack Query manages data freshness there.
  */
+/** True after the very first clientLoader run completes successfully. Used to
+ *  skip the 3-second "Ready" pause on subsequent opco/partner revalidations. */
+let _hasLoadedOnce = false;
+
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
@@ -85,6 +93,11 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   if (!token || !spaceId || !environment) {
     return redirect("/login");
   }
+
+  // Signal the layout to show the loading overlay, then reset step progress.
+  // This fires before any async work so the overlay appears immediately.
+  dispatchNavLoadingStart();
+  resetLoadStep();
 
   // Remove any corrupted selection values that might have been stored as
   // "[object Object]" from a previous bad run.
@@ -428,9 +441,13 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   dispatchLoadStep(5);
 
-  // Mark all steps done, wait 3s so the user can read the loading feedback.
+  // Mark all steps done.
+  // On the initial load we keep a 3-second pause so the user can read the
+  // step-by-step feedback. On opco/partner revalidations use a shorter pause
+  // so the steps are still visible before the overlay dismisses.
   dispatchLoadComplete();
-  await new Promise((r) => setTimeout(r, 3000));
+  await new Promise((r) => setTimeout(r, _hasLoadedOnce ? 1500 : 3000));
+  _hasLoadedOnce = true;
 
   // Seed TanStack Query cache so useEntry/useAsset hooks across all pages get
   // instant results without extra API calls for data we just loaded.
@@ -604,6 +621,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     localizableFieldsMap,
     opcoConfiguredLocaleCodes,
     cacheLastUpdated,
+    scheduledActions,
   } = loaderData;
 
   const firstLocale = locales.items[0]?.code ?? "en";
@@ -660,6 +678,22 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     isLocalizable(partnerMessages.items) ||
     isLocalizable(partnerEmails.items) ||
     partnerRefGroups.some((g) => isLocalizable(g.items));
+
+  // Count unpublished items (same logic as home.unpublished.tsx: updatedAt > publishedAt).
+  // OPCO items exclude any entry that also has a partner field.
+  const unpublishedCount = [
+    ...opcoPages.items.filter((i: any) => !i.fields?.partner),
+    ...opcoMessages.items.filter((i: any) => !i.fields?.partner),
+    ...partnerPages.items,
+    ...partnerMessages.items,
+    ...partnerEmails.items,
+  ].filter((i: any) => {
+    const { publishedAt, updatedAt } = i.sys ?? {};
+    if (!publishedAt) return true;
+    return new Date(updatedAt) > new Date(publishedAt);
+  }).length;
+
+  const scheduledCount = (scheduledActions as any[])?.length ?? 0;
 
   const opcoHasMissingTranslations = opcoHasLocalizable
     ? hasAnyMissingTranslations([opcoPages, opcoMessages, ...opcoRefGroups])
@@ -762,6 +796,10 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const [sidebarResetKey, setSidebarResetKey] = useState(0);
   const [showFullLoading, setShowFullLoading] = useState(false);
   const [isInactive, setIsInactive] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  // Records when the loading overlay was last shown, so we can enforce a
+  // minimum visible duration even when all data comes from cache.
+  const loadingShownAt = useRef<number>(0);
   const { disableEditMode } = useEditMode();
 
   useEffect(() => {
@@ -771,9 +809,37 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     if (shouldExpandPartner) setPartnerExpanded(true);
   }, [shouldExpandPartner]);
 
-  // Hide full loading screen once the navigation finishes
+  // Auto-show tour on first-ever visit (after initial load settles)
   useEffect(() => {
-    if (!isLoading && showFullLoading) setShowFullLoading(false);
+    if (!isLoading && !isTourSeen()) {
+      const t = setTimeout(() => setTourOpen(true), 800);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
+
+  // Show the full loading overlay whenever the clientLoader signals it is
+  // about to start a (re)load. This fires synchronously before any step
+  // events so the LoadingScreen is mounted and ready to receive them.
+  useEffect(() => {
+    const handler = () => {
+      loadingShownAt.current = Date.now();
+      setShowFullLoading(true);
+    };
+    window.addEventListener(NAV_LOADING_EVENT, handler);
+    return () => window.removeEventListener(NAV_LOADING_EVENT, handler);
+  }, []);
+
+  // Hide full loading screen once navigation finishes, but never sooner than
+  // MIN_LOADING_MS after it appeared — so cached-data reloads are still visible.
+  const MIN_LOADING_MS = 2000;
+  useEffect(() => {
+    if (!isLoading && showFullLoading) {
+      const elapsed = Date.now() - loadingShownAt.current;
+      const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+      const timer = setTimeout(() => setShowFullLoading(false), remaining);
+      return () => clearTimeout(timer);
+    }
   }, [isLoading, showFullLoading]);
 
   // Refresh data when the tab regains visibility and the cache has gone stale.
@@ -885,7 +951,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     setOpcoExpanded(false);
     setPartnerExpanded(false);
     setSidebarResetKey((k) => k + 1);
-    setShowFullLoading(true);
+    // showFullLoading is set via the NAV_LOADING_EVENT dispatched by clientLoader.
     disableEditMode();
     // Invalidate all queries scoped to the previous OPCO/partner so stale
     // data from the old context cannot bleed into the new one.
@@ -933,7 +999,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     localStorage.setItem("selectedPartner", id);
     setPartnerExpanded(false);
     setSidebarResetKey((k) => k + 1);
-    setShowFullLoading(true);
+    // showFullLoading is set via the NAV_LOADING_EVENT dispatched by clientLoader.
     disableEditMode();
     const params = new URLSearchParams(searchParams);
     params.set("partner", id);
@@ -1073,6 +1139,9 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
               isLocalizable={isLocalizable}
               resetKey={sidebarResetKey}
               groupMissingMap={groupMissingMap}
+              unpublishedCount={unpublishedCount}
+              scheduledCount={scheduledCount}
+              onTakeTour={() => setTourOpen(true)}
             />
 
             {/* Main content */}
@@ -1125,16 +1194,11 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
           <AppFooter
             maskedToken={maskedToken}
             cacheLastUpdated={cacheLastUpdated}
-            isLoading={isLoading}
-            onRefreshCache={() => {
-              clearCache();
-              navigate(0);
-            }}
-            cacheTtlMs={CACHE_TTL_MS}
             isInactive={isInactive}
           />
         </div>
       </div>
+      <OnboardingTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </ToastProvider>
   );
 }

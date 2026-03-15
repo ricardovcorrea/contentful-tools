@@ -46,6 +46,11 @@ interface Props {
   resetKey?: number;
   // Per content-type-group missing translation flags
   groupMissingMap?: Record<string, boolean>;
+  // Badge counts for nav items
+  unpublishedCount?: number;
+  scheduledCount?: number;
+  // Tour
+  onTakeTour?: () => void;
 }
 
 function getName(fields: Record<string, any>, locale: string) {
@@ -177,6 +182,9 @@ export function AppSidebar({
   isLocalizable,
   resetKey,
   groupMissingMap = {},
+  unpublishedCount,
+  scheduledCount,
+  onTakeTour,
 }: Props) {
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 1024,
@@ -399,19 +407,26 @@ export function AppSidebar({
                       : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
                   }`}
                 >
-                  <svg
-                    className="w-3.5 h-3.5 shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
+                  <div className="relative">
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    {!!unpublishedCount && unpublishedCount > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                        {unpublishedCount > 99 ? "99+" : unpublishedCount}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[9px] font-semibold leading-none">
                     Unpub
                   </span>
@@ -424,26 +439,32 @@ export function AppSidebar({
                       : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
                   }`}
                 >
-                  <svg
-                    className="w-3.5 h-3.5 shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
+                  <div className="relative">
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    {!!scheduledCount && scheduledCount > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-violet-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                        {scheduledCount > 99 ? "99+" : scheduledCount}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[9px] font-semibold leading-none">
                     Sched
                   </span>
                 </button>
                 <button
                   onClick={() => {
-                    setCollapsed(false);
                     onNavigate("/locales");
                   }}
                   className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
@@ -695,7 +716,7 @@ export function AppSidebar({
             <div>
               <button
                 onClick={() => setEnvExpanded((p) => !p)}
-                className={`w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-sky-500/10 transition-colors border-b border-sky-200/40 ${
+                className={`w-full flex items-center gap-2 px-2.5 py-3 mt-1.5 group hover:bg-sky-500/10 transition-colors border-b border-sky-200/40 ${
                   envShouldBeOpen && !envExpanded
                     ? "bg-sky-500/15 border-l-2 border-l-sky-500"
                     : ""
@@ -743,7 +764,7 @@ export function AppSidebar({
                 <>
                   <button
                     onClick={() => onNavigate("/environment")}
-                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                       pathname === "/environment"
                         ? "border-sky-500 bg-sky-500/10 text-sky-700"
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -772,7 +793,7 @@ export function AppSidebar({
                   {opcoEntrySysId && (
                     <button
                       onClick={() => onGoToEntry(opcoEntrySysId)}
-                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                         entryId === opcoEntrySysId &&
                         !pathname.startsWith("/overview/")
                           ? "border-sky-500 bg-sky-500/10 text-sky-700"
@@ -793,7 +814,7 @@ export function AppSidebar({
                   {partnerEntrySysId && (
                     <button
                       onClick={() => onGoToEntry(partnerEntrySysId)}
-                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                         entryId === partnerEntrySysId &&
                         !pathname.startsWith("/overview/")
                           ? "border-sky-500 bg-sky-500/10 text-sky-700"
@@ -823,7 +844,7 @@ export function AppSidebar({
                   {/* Assets */}
                   <button
                     onClick={() => onNavigate("/assets")}
-                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                       pathname === "/assets"
                         ? "border-sky-500 bg-sky-500/10 text-sky-700"
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -851,8 +872,9 @@ export function AppSidebar({
 
                   {/* Sitemap */}
                   <button
+                    data-tour="nav-sitemap"
                     onClick={() => onNavigate("/sitemap")}
-                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                       pathname === "/sitemap"
                         ? "border-sky-500 bg-sky-500/10 text-sky-700"
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -880,8 +902,9 @@ export function AppSidebar({
 
                   {/* Unpublished */}
                   <button
+                    data-tour="nav-unpublished"
                     onClick={() => onNavigate("/unpublished")}
-                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                       pathname === "/unpublished"
                         ? "border-sky-500 bg-sky-500/10 text-sky-700"
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -905,12 +928,17 @@ export function AppSidebar({
                     <span className="text-xs font-semibold text-gray-600 flex-1">
                       Unpublished
                     </span>
+                    {!!unpublishedCount && unpublishedCount > 0 && (
+                      <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                        {unpublishedCount > 99 ? "99+" : unpublishedCount}
+                      </span>
+                    )}
                   </button>
 
                   {/* Scheduled */}
                   <button
                     onClick={() => onNavigate("/scheduled")}
-                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                       pathname === "/scheduled"
                         ? "border-sky-500 bg-sky-500/10 text-sky-700"
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -934,11 +962,16 @@ export function AppSidebar({
                     <span className="text-xs font-semibold text-gray-600 flex-1">
                       Scheduled
                     </span>
+                    {!!scheduledCount && scheduledCount > 0 && (
+                      <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                        {scheduledCount > 99 ? "99+" : scheduledCount}
+                      </span>
+                    )}
                   </button>
 
                   <button
                     onClick={() => onNavigate("/locales")}
-                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                       localeActive
                         ? "border-sky-500 bg-sky-500/10 text-sky-700"
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -970,8 +1003,9 @@ export function AppSidebar({
             {/* Translations section */}
             <div>
               <button
+                data-tour="translations-section"
                 onClick={() => setTranslationsExpanded((p) => !p)}
-                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-indigo-500/10 transition-colors border-b border-indigo-200/40"
+                className="w-full flex items-center gap-2 px-2.5 py-3 mt-1.5 group hover:bg-indigo-500/10 transition-colors border-b border-indigo-200/40"
               >
                 <div className="w-6 h-6 rounded-md border border-indigo-400/30 flex items-center justify-center shrink-0">
                   <svg
@@ -1016,7 +1050,7 @@ export function AppSidebar({
                   {opcoHasLocalizable && (
                     <button
                       onClick={() => onNavigate("/overview/opco")}
-                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                         pathname === "/overview/opco" ||
                         pathname.startsWith("/overview/opco/")
                           ? "border-violet-500 bg-violet-500/10 text-violet-700"
@@ -1046,7 +1080,7 @@ export function AppSidebar({
                   {partnerHasLocalizable && (
                     <button
                       onClick={() => onNavigate("/overview/partner")}
-                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                         pathname === "/overview/partner" ||
                         pathname.startsWith("/overview/partner/")
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-700"
@@ -1089,7 +1123,7 @@ export function AppSidebar({
             <div>
               <button
                 onClick={() => setContentExpanded((p) => !p)}
-                className="w-full flex items-center gap-2 px-2.5 py-2 mt-1.5 group hover:bg-teal-500/10 transition-colors border-b border-teal-200/40"
+                className="w-full flex items-center gap-2 px-2.5 py-3 mt-1.5 group hover:bg-teal-500/10 transition-colors border-b border-teal-200/40"
               >
                 <div className="w-6 h-6 rounded-md border border-teal-400/30 flex items-center justify-center shrink-0">
                   <svg
@@ -1134,8 +1168,9 @@ export function AppSidebar({
                   {/* OPCO section */}
                   <div>
                     <button
+                      data-tour="opco-section"
                       onClick={onOpcoToggle}
-                      className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                         isInOpcoSection
                           ? "border-violet-500 bg-violet-500/10 text-violet-700"
                           : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -1153,7 +1188,9 @@ export function AppSidebar({
                           firstLocale,
                         )}
                         fallback="OPC"
-                        className="w-5 h-5 rounded-md border border-violet-400/20 bg-violet-500/10 text-[8px] font-extrabold text-violet-500 uppercase tracking-tight shrink-0"
+                        className="rounded-md border border-violet-400/20 bg-violet-500/10 text-[8px] font-extrabold text-violet-500 uppercase tracking-tight"
+                        size={20}
+                        boxWidth={56}
                       />
                       <span className="text-xs font-semibold text-gray-600 flex-1 truncate">
                         {getName(
@@ -1455,7 +1492,7 @@ export function AppSidebar({
                     <div>
                       <button
                         onClick={onPartnerToggle}
-                        className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                        className={`w-full text-left flex items-center gap-2 px-2.5 py-2 border-l-2 transition-colors ${
                           isInPartnerSection
                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-700"
                             : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -1473,7 +1510,9 @@ export function AppSidebar({
                             firstLocale,
                           )}
                           fallback="PRT"
-                          className="w-5 h-5 rounded-md border border-emerald-400/20 bg-emerald-500/10 text-[8px] font-extrabold text-emerald-500 uppercase tracking-tight shrink-0"
+                          className="rounded-md border border-emerald-400/20 bg-emerald-500/10 text-[8px] font-extrabold text-emerald-500 uppercase tracking-tight"
+                          size={20}
+                          boxWidth={56}
                         />
                         <span className="text-xs font-semibold text-gray-600 flex-1 truncate">
                           {getName(
@@ -1885,6 +1924,41 @@ export function AppSidebar({
             </div>
           </div>
         </>
+      )}
+
+      {/* Take Tour */}
+      {onTakeTour && (
+        <div className="shrink-0 border-t border-gray-200/60 px-3 py-2">
+          <button
+            data-tour="take-tour"
+            onClick={onTakeTour}
+            title="Take Tour"
+            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100/70 transition-colors"
+          >
+            {/* Compass icon */}
+            <svg
+              className="w-4 h-4 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.24 7.76L14.12 14.12L7.76 16.24L9.88 9.88L16.24 7.76Z"
+              />
+            </svg>
+            <span className="text-xs font-medium whitespace-nowrap overflow-hidden">
+              Take tour
+            </span>
+          </button>
+        </div>
       )}
     </aside>
   );

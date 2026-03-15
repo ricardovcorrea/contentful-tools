@@ -8,7 +8,11 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev",
-    "start": "react-router-serve ./build/server/index.js",
+    "start": "npm run docker:build && npm run docker:run",
+    "start:node": "react-router-serve ./build/server/index.js",
+    "docker:build": "docker build -t avios-content-tools .",
+    "docker:run": "docker run --rm -p 3000:3000 --name avios-content-tools avios-content-tools",
+    "docker:stop": "docker stop avios-content-tools",
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
@@ -21,6 +25,7 @@
     "@tanstack/react-query-persist-client": "^5.90.24",
     "contentful": "^11.10.6",
     "contentful-management": "^11.74.0",
+    "driver.js": "^1.4.0",
     "isbot": "^5.1.31",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

@@ -77,4 +77,13 @@ export const queryKeys = {
     ["env-ct-total", spaceId, envId] as const,
   envAssetsTotal: (spaceId: string, envId: string) =>
     ["env-assets-total", spaceId, envId] as const,
+
+  // ── Sitemap ───────────────────────────────────────────────────────────────
+  /** All partner pages fetched for the sitemap view, keyed by opcoId. */
+  sitemapPartnerPages: (opcoId: string) =>
+    ["sitemap-partner-pages", opcoId] as const,
+
+  // ── All assets for an environment (used by the Assets view) ─────────────
+  allAssets: (spaceId: string, envId: string) =>
+    ["all-assets", spaceId, envId] as const,
 };

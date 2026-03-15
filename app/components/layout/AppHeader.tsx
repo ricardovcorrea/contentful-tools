@@ -77,20 +77,20 @@ export function AppHeader({
 
   return (
     <>
-      <header className="bg-gray-50 border-b border-gray-200/70 h-12 sm:h-16 lg:h-14 xl:h-22 px-2 sm:px-4 lg:px-3 xl:px-6 flex items-center justify-between shrink-0 z-50">
+      <header className="bg-gray-50 border-b border-gray-200/70 h-11 sm:h-12 lg:h-11 xl:h-14 px-2 sm:px-4 lg:px-3 xl:px-6 flex items-center justify-between shrink-0 z-50">
         {/* Left — Logo + Space + Env */}
         <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-1.5 xl:gap-3 min-w-0">
-          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-1.5 xl:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-1.5 xl:gap-2 shrink-0">
             <img
               src="/favicon.svg"
               alt="Avios"
-              className="w-8 h-8 sm:w-9 sm:h-9 lg:w-8 lg:h-8 xl:w-12 xl:h-12 rounded-xl shadow-sm"
+              className="w-6 h-6 sm:w-7 sm:h-7 lg:w-6 lg:h-6 xl:w-8 xl:h-8 rounded-lg shadow-sm"
             />
             <div className="leading-tight hidden xl:block">
-              <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest leading-none hidden sm:block">
+              <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-widest leading-none hidden sm:block">
                 Avios
               </div>
-              <div className="text-[13px] sm:text-sm lg:text-[13px] xl:text-lg font-bold text-gray-900 leading-tight">
+              <div className="text-xs font-bold text-gray-900 leading-tight">
                 Content Tools
               </div>
             </div>

@@ -1,7 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouteLoaderData, useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
 import { resolveStringField } from "~/lib/resolve-string-field";
+import { queryKeys } from "~/lib/query-keys";
+import { QUERY_STALE_TIME } from "~/lib/query-client";
 import type { RefGroup } from "~/lib/contentful/get-entry-tree";
 
 type ParentLoaderData = {
@@ -123,13 +126,36 @@ export default function AssetsPage() {
   const firstLocale = parentData?.firstLocale ?? "en-GB";
   const navigate = useNavigate();
 
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | "images" | "documents">(
     "all",
   );
+
+  const {
+    data: assets = [],
+    isLoading: loading,
+    error: assetsError,
+  } = useQuery({
+    queryKey: queryKeys.allAssets(spaceId ?? "", environmentId ?? ""),
+    queryFn: async () => {
+      const environment = await getContentfulManagementEnvironment();
+      const total = envStats?.totalAssets ?? 0;
+      const limit = 200;
+      const batches = Math.ceil(Math.max(total, 1) / limit);
+      const results: Asset[] = [];
+      for (let i = 0; i < batches; i++) {
+        const page = await environment.getAssets({ limit, skip: i * limit });
+        results.push(...(page.items as Asset[]));
+      }
+      return results;
+    },
+    enabled: !!(spaceId && environmentId),
+    staleTime: QUERY_STALE_TIME,
+  });
+
+  const error = assetsError
+    ? ((assetsError as any)?.message ?? "Failed to load assets")
+    : null;
 
   // Build asset → entry reference map from all loaded entry collections
   const assetRefMap = useMemo<Map<string, AssetRef[]>>(() => {
@@ -177,45 +203,6 @@ export default function AssetsPage() {
     partnerRefGroups,
     firstLocale,
   ]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    (async () => {
-      try {
-        const environment = await getContentfulManagementEnvironment();
-        const total = envStats?.totalAssets ?? 0;
-        const limit = 200;
-        const batches = Math.ceil(Math.max(total, 1) / limit);
-        const results: Asset[] = [];
-
-        for (let i = 0; i < batches; i++) {
-          if (cancelled) return;
-          const page = await environment.getAssets({
-            limit,
-            skip: i * limit,
-          });
-          results.push(...(page.items as Asset[]));
-        }
-
-        if (!cancelled) {
-          setAssets(results);
-          setLoading(false);
-        }
-      } catch (err: any) {
-        if (!cancelled) {
-          setError(err?.message ?? "Failed to load assets");
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [environmentId, spaceId]);
 
   const filtered = search.trim()
     ? assets.filter((a) => {

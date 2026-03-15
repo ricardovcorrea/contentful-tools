@@ -148,7 +148,7 @@ export default function LocalesPage() {
 
                 {/* Open in Contentful */}
                 <a
-                  href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/locales`}
+                  href={`https://app.contentful.com/spaces/${spaceId}/settings/locales`}
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Open in Contentful"
