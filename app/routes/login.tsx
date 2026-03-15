@@ -820,12 +820,17 @@ function DashboardMock() {
 // ── Landing page ───────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const [loginOpen, setLoginOpen] = useState(false);
-  const [inactivityBanner, setInactivityBanner] = useState(false);
+  const [logoutReason, setLogoutReason] = useState<
+    "inactivity" | "session_expired" | null
+  >(null);
 
   useEffect(() => {
-    const reason = localStorage.getItem("loggedOutReason");
-    if (reason === "inactivity") {
-      setInactivityBanner(true);
+    const reason = localStorage.getItem("loggedOutReason") as
+      | "inactivity"
+      | "session_expired"
+      | null;
+    if (reason === "inactivity" || reason === "session_expired") {
+      setLogoutReason(reason);
       setLoginOpen(true);
     }
   }, []);
@@ -844,8 +849,9 @@ export default function LandingPage() {
       {loginOpen && (
         <LoginModal
           onClose={() => setLoginOpen(false)}
-          showInactivityBanner={inactivityBanner}
-          onDismissInactivity={() => setInactivityBanner(false)}
+          showInactivityBanner={logoutReason === "inactivity"}
+          showSessionExpiredBanner={logoutReason === "session_expired"}
+          onDismissInactivity={() => setLogoutReason(null)}
         />
       )}
 
@@ -1543,21 +1549,43 @@ export default function LandingPage() {
 function LoginModal({
   onClose,
   showInactivityBanner,
+  showSessionExpiredBanner = false,
   onDismissInactivity,
 }: {
   onClose: () => void;
   showInactivityBanner: boolean;
+  showSessionExpiredBanner?: boolean;
   onDismissInactivity: () => void;
 }) {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>("token");
-  const [token, setToken] = useState("");
+
+  // For session-expired reconnect: check for saved credentials up-front.
+  const savedToken = localStorage.getItem("contentfulManagementToken") ?? "";
+  const savedSpaceId = localStorage.getItem("contentfulSpaceId") ?? "";
+  const savedEnvironmentId =
+    localStorage.getItem("contentfulEnvironment") ?? "";
+  const canReconnect =
+    showSessionExpiredBanner &&
+    !!savedToken &&
+    !!savedSpaceId &&
+    !!savedEnvironmentId;
+
+  const [step, setStep] = useState<Step>(
+    canReconnect ? "environment" : "token",
+  );
+  const [token, setToken] = useState(canReconnect ? savedToken : "");
   const [isValidating, setIsValidating] = useState(false);
   const [spaces, setSpaces] = useState<Space[]>([]);
-  const [selectedSpaceId, setSelectedSpaceId] = useState("");
+  const [selectedSpaceId, setSelectedSpaceId] = useState(
+    canReconnect ? savedSpaceId : "",
+  );
   const [isLoadingSpaces, setIsLoadingSpaces] = useState(false);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState("");
+  const [environments, setEnvironments] = useState<Environment[]>(
+    canReconnect ? [{ sys: { id: savedEnvironmentId } }] : [],
+  );
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(
+    canReconnect ? savedEnvironmentId : "",
+  );
   const [isLoadingEnvironments, setIsLoadingEnvironments] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -1629,6 +1657,14 @@ function LoginModal({
     if (!selectedSpaceId || !selectedEnvironmentId) return;
     localStorage.setItem("contentfulSpaceId", selectedSpaceId);
     localStorage.setItem("contentfulEnvironment", selectedEnvironmentId);
+    // Stamp current time as the first "last activity" so the inactivity
+    // timer starts from this moment.
+    localStorage.setItem("sessionLastActivityAt", String(Date.now()));
+    // On reconnect after session expiry, the token stayed in localStorage;
+    // ensure the management client is re-initialised with it.
+    if (canReconnect) {
+      clearContentfulManagementClient();
+    }
     setIsSuccess(true);
     navigate("/");
   };
@@ -1657,7 +1693,7 @@ function LoginModal({
         onClick={onClose}
       />
       <div className="relative z-10 w-full max-w-md flex flex-col gap-5">
-        {showInactivityBanner && (
+        {(showInactivityBanner || showSessionExpiredBanner) && (
           <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5 shadow-lg">
             <svg
               className="w-4 h-4 shrink-0 mt-0.5 text-amber-600"
@@ -1673,7 +1709,9 @@ function LoginModal({
               />
             </svg>
             <p className="flex-1 text-sm font-semibold text-amber-800 leading-snug">
-              You were signed out due to inactivity.
+              {showSessionExpiredBanner
+                ? "You were signed out after 2 hours of inactivity."
+                : "You were signed out due to inactivity."}
             </p>
             <button
               onClick={onDismissInactivity}
@@ -2011,14 +2049,18 @@ function LoginModal({
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-gray-900">
-                      Select Environment
+                      {canReconnect ? "Reconnect" : "Select Environment"}
                     </h2>
                     <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                      Choose the environment to connect to (e.g.{" "}
-                      <code className="bg-gray-100 px-1 rounded text-gray-600 text-[10px]">
-                        master
-                      </code>
-                      ).
+                      {canReconnect
+                        ? "Your previous session credentials are saved. Click Reconnect to resume."
+                        : "Choose the environment to connect to (e.g. "}
+                      {!canReconnect && (
+                        <code className="bg-gray-100 px-1 rounded text-gray-600 text-[10px]">
+                          master
+                        </code>
+                      )}
+                      {!canReconnect && ")."}
                     </p>
                   </div>
                 </div>
@@ -2032,77 +2074,154 @@ function LoginModal({
                   <SummaryChip
                     label="Space"
                     value={
-                      selectedSpace
-                        ? `${selectedSpace.name} (${selectedSpace.sys.id})`
-                        : selectedSpaceId
+                      canReconnect
+                        ? savedSpaceId
+                        : selectedSpace
+                          ? `${selectedSpace.name} (${selectedSpace.sys.id})`
+                          : selectedSpaceId
                     }
                   />
+                  <SummaryChip label="Env" value={selectedEnvironmentId} />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="environment"
-                    className="text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                {!canReconnect && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label
+                        htmlFor="environment"
+                        className="text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                      >
+                        Environment
+                      </label>
+                      <select
+                        id="environment"
+                        value={selectedEnvironmentId}
+                        onChange={(e) =>
+                          setSelectedEnvironmentId(e.target.value)
+                        }
+                        disabled={environments.length === 0 || isSuccess}
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
+                      >
+                        {environments.map((env) => (
+                          <option key={env.sys.id} value={env.sys.id}>
+                            {env.sys.id}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-400">
+                        {environments.length} environment
+                        {environments.length !== 1 ? "s" : ""} available.
+                      </p>
+                    </div>
+                  </>
+                )}
+                {error && <ErrorBanner message={error} />}
+                <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
                   >
-                    Environment
-                  </label>
-                  <select
-                    id="environment"
-                    value={selectedEnvironmentId}
-                    onChange={(e) => setSelectedEnvironmentId(e.target.value)}
-                    disabled={environments.length === 0 || isSuccess}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
-                  >
-                    {environments.map((env) => (
-                      <option key={env.sys.id} value={env.sys.id}>
-                        {env.sys.id}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-400">
-                    {environments.length} environment
-                    {environments.length !== 1 ? "s" : ""} available.
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    You will be automatically signed out after{" "}
+                    <span className="font-semibold">2 hours of inactivity</span>
+                    . Any activity resets the countdown.
                   </p>
                 </div>
-                {error && <ErrorBanner message={error} />}
                 <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep("space");
-                      setError(null);
-                    }}
-                    className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={
-                      !selectedSpaceId || !selectedEnvironmentId || isSuccess
-                    }
-                    className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                  >
-                    {isSuccess ? (
-                      <>
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2.5}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                        Redirecting…
-                      </>
-                    ) : (
-                      "Connect"
-                    )}
-                  </button>
+                  {canReconnect ? (
+                    <button
+                      type="submit"
+                      disabled={isSuccess}
+                      className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                    >
+                      {isSuccess ? (
+                        <>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Reconnecting…
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                          </svg>
+                          Reconnect
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStep("space");
+                          setError(null);
+                        }}
+                        className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={
+                          !selectedSpaceId ||
+                          !selectedEnvironmentId ||
+                          isSuccess
+                        }
+                        className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                      >
+                        {isSuccess ? (
+                          <>
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2.5}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                            Redirecting…
+                          </>
+                        ) : (
+                          "Connect"
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </form>
             </>

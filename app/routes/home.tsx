@@ -268,6 +268,9 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const environments = environmentsList.items.map((e: any) => ({
     id: e.sys.id,
     name: e.name,
+    aliasedToMaster: (e.sys.aliases ?? []).some(
+      (a: any) => a.sys?.id === "master",
+    ),
   }));
 
   // Fire env-level stats + scheduled actions in the background immediately —
@@ -620,7 +623,6 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     localizableContentTypes,
     localizableFieldsMap,
     opcoConfiguredLocaleCodes,
-    cacheLastUpdated,
     scheduledActions,
   } = loaderData;
 
@@ -795,7 +797,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const [partnerExpanded, setPartnerExpanded] = useState(shouldExpandPartner);
   const [sidebarResetKey, setSidebarResetKey] = useState(0);
   const [showFullLoading, setShowFullLoading] = useState(false);
-  const [isInactive, setIsInactive] = useState(false);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const { disableEditMode } = useEditMode();
 
@@ -850,83 +852,81 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [navigate]);
 
-  // Two-stage auto-logout:
-  //   Stage 1 — after INACTIVE_AFTER_MS of no input → show "Inactive" badge in footer
-  //   Stage 2 — after a further (LOGOUT_AFTER_MS − INACTIVE_AFTER_MS) → force logout
-  const INACTIVE_AFTER_MS = 15_000; // 15 seconds → show footer badge
-  const LOGOUT_AFTER_MS = 5 * 60 * 1000; // 5 minutes total → logout
+  // Inactivity session expiry — the session expires after SESSION_INACTIVITY_MS
+  // of no user input. Any activity resets the countdown.
+  const SESSION_INACTIVITY_MS = 2 * 60 * 60 * 1000; // 2 hours of inactivity
 
   // Keep a stable ref to navigate so the effect never needs to re-run on
-  // route changes (which would reset the idle timer on every navigation).
+  // route changes (which would reset the session timer on every navigation).
   const navigateRef = useRef(navigate);
   useEffect(() => {
     navigateRef.current = navigate;
   }, [navigate]);
 
-  // Refs for both timer stages.
-  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
-    const logout = () => {
-      setIsInactive(false);
-      localStorage.setItem("loggedOutReason", "inactivity");
-      localStorage.removeItem("contentfulManagementToken");
-      localStorage.removeItem("contentfulSpaceId");
-      localStorage.removeItem("contentfulEnvironment");
-      localStorage.removeItem("selectedOpco");
-      localStorage.removeItem("selectedPartner");
+    const expireSession = () => {
+      // Keep token / spaceId / environment in localStorage so the login modal
+      // can pre-fill all steps and the user only needs to click Reconnect.
+      localStorage.setItem("loggedOutReason", "session_expired");
+      localStorage.removeItem("sessionLastActivityAt");
+      // Clear only the in-memory state — credentials stay for reconnect.
       clearCache();
       clearContentfulManagementClient();
       queryClient.clear();
       navigateRef.current("/login", { replace: true });
     };
 
-    const markInactive = () => {
-      setIsInactive(true);
-      // Schedule actual logout for the remaining window.
-      inactivityTimer.current = setTimeout(
-        logout,
-        LOGOUT_AFTER_MS - INACTIVE_AFTER_MS,
-      );
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleExpiry = (expiresAt: number) => {
+      if (timer) clearTimeout(timer);
+      setSessionExpiresAt(expiresAt);
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        expireSession();
+        return;
+      }
+      timer = setTimeout(expireSession, remaining);
     };
 
-    const resetTimer = () => {
-      setIsInactive(false);
-      if (statusTimer.current) clearTimeout(statusTimer.current);
-      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-      statusTimer.current = setTimeout(markInactive, INACTIVE_AFTER_MS);
+    const onActivity = () => {
+      const now = Date.now();
+      localStorage.setItem("sessionLastActivityAt", String(now));
+      scheduleExpiry(now + SESSION_INACTIVITY_MS);
     };
 
-    // Use capture:true so the listeners fire even if a child calls
-    // stopPropagation(), and listen on document (not window) so React's
-    // synthetic event system doesn't swallow anything.
+    // Initialise — check for saved last-activity timestamp.
+    const raw = localStorage.getItem("sessionLastActivityAt");
+    const lastActivity = raw ? parseInt(raw, 10) : null;
+    if (!lastActivity) {
+      expireSession();
+      return;
+    }
+
+    scheduleExpiry(lastActivity + SESSION_INACTIVITY_MS);
+
     const opts = { capture: true, passive: true } as const;
     const events = [
       "mousemove",
       "mousedown",
       "click",
       "keydown",
-      "keypress",
       "touchstart",
       "touchmove",
       "scroll",
       "wheel",
-      "focus",
     ] as const;
 
-    events.forEach((e) => document.addEventListener(e, resetTimer, opts));
-    resetTimer(); // start the idle clock on mount
+    events.forEach((e) => document.addEventListener(e, onActivity, opts));
 
     return () => {
-      if (statusTimer.current) clearTimeout(statusTimer.current);
-      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      if (timer) clearTimeout(timer);
       events.forEach((e) =>
-        document.removeEventListener(e, resetTimer, { capture: true }),
+        document.removeEventListener(e, onActivity, { capture: true }),
       );
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — navigateRef and setIsInactive are stable refs
+  }, []); // intentionally empty — navigateRef is a stable ref
 
   const rawToken = localStorage.getItem("contentfulManagementToken") ?? "";
   const maskedToken =
@@ -1184,8 +1184,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
 
           <AppFooter
             maskedToken={maskedToken}
-            cacheLastUpdated={cacheLastUpdated}
-            isInactive={isInactive}
+            sessionExpiresAt={sessionExpiresAt}
           />
         </div>
       </div>

@@ -421,11 +421,11 @@ export function AppSidebar({
                         d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                       />
                     </svg>
-                    {!!unpublishedCount && unpublishedCount > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
-                        {unpublishedCount > 99 ? "99+" : unpublishedCount}
-                      </span>
-                    )}
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {(unpublishedCount ?? 0) > 99
+                        ? "99+"
+                        : (unpublishedCount ?? 0)}
+                    </span>
                   </div>
                   <span className="text-[9px] font-semibold leading-none">
                     Unpub
@@ -453,11 +453,11 @@ export function AppSidebar({
                         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    {!!scheduledCount && scheduledCount > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-violet-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
-                        {scheduledCount > 99 ? "99+" : scheduledCount}
-                      </span>
-                    )}
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-violet-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {(scheduledCount ?? 0) > 99
+                        ? "99+"
+                        : (scheduledCount ?? 0)}
+                    </span>
                   </div>
                   <span className="text-[9px] font-semibold leading-none">
                     Sched
@@ -487,13 +487,9 @@ export function AppSidebar({
                         d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
                       />
                     </svg>
-                    {locales.items.length > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-sky-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
-                        {locales.items.length > 99
-                          ? "99+"
-                          : locales.items.length}
-                      </span>
-                    )}
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-sky-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {locales.items.length > 99 ? "99+" : locales.items.length}
+                    </span>
                   </div>
                   <span className="text-[9px] font-semibold leading-none">
                     Locales
@@ -937,11 +933,11 @@ export function AppSidebar({
                     <span className="text-xs font-semibold text-gray-600 flex-1">
                       Unpublished
                     </span>
-                    {!!unpublishedCount && unpublishedCount > 0 && (
-                      <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
-                        {unpublishedCount > 99 ? "99+" : unpublishedCount}
-                      </span>
-                    )}
+                    <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {(unpublishedCount ?? 0) > 99
+                        ? "99+"
+                        : (unpublishedCount ?? 0)}
+                    </span>
                   </button>
 
                   {/* Scheduled */}
@@ -971,11 +967,11 @@ export function AppSidebar({
                     <span className="text-xs font-semibold text-gray-600 flex-1">
                       Scheduled
                     </span>
-                    {!!scheduledCount && scheduledCount > 0 && (
-                      <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
-                        {scheduledCount > 99 ? "99+" : scheduledCount}
-                      </span>
-                    )}
+                    <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {(scheduledCount ?? 0) > 99
+                        ? "99+"
+                        : (scheduledCount ?? 0)}
+                    </span>
                   </button>
 
                   <button
@@ -1004,13 +1000,9 @@ export function AppSidebar({
                     <span className="text-xs font-semibold text-gray-600 flex-1">
                       Locales
                     </span>
-                    {locales.items.length > 0 && (
-                      <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-sky-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
-                        {locales.items.length > 99
-                          ? "99+"
-                          : locales.items.length}
-                      </span>
-                    )}
+                    <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-sky-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {locales.items.length > 99 ? "99+" : locales.items.length}
+                    </span>
                   </button>
                 </>
               )}

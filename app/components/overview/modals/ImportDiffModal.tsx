@@ -39,7 +39,7 @@ export function ImportDiffModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[96vw] max-h-[90vh] flex flex-col mx-4"
+        className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-5xl lg:max-w-7xl xl:max-w-[1400px] 2xl:max-w-[1600px] max-h-[90vh] flex flex-col mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal header */}

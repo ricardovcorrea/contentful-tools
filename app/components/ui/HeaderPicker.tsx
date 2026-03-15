@@ -5,6 +5,7 @@ export type HeaderPickerOption = {
   value: string;
   label: string;
   imageAssetId?: string;
+  badge?: string;
 };
 
 export function HeaderPicker({
@@ -16,16 +17,18 @@ export function HeaderPicker({
   onCreateFirst,
   onCreate,
   createDisabled,
+  hideIcon = false,
 }: {
   label: string;
   value: string;
   options: HeaderPickerOption[];
   onChange: (v: string) => void;
   disabled?: boolean;
-  theme?: string; // accepted but ignored — kept for call-site compatibility
-  onCreateFirst?: () => void; // kept for backward compat, maps to onCreate
+  theme?: string;
+  onCreateFirst?: () => void;
   onCreate?: () => void;
   createDisabled?: boolean;
+  hideIcon?: boolean;
 }) {
   const createHandler = onCreate ?? onCreateFirst;
   const [open, setOpen] = useState(false);
@@ -80,7 +83,7 @@ export function HeaderPicker({
               />
             </svg>
           </span>
-        ) : (
+        ) : !hideIcon ? (
           /* Logo — bare wide image at natural aspect ratio, or initials pill */
           <div className="flex items-center shrink-0" style={{ height: 28 }}>
             <LogoAvatar
@@ -90,14 +93,23 @@ export function HeaderPicker({
               size={28}
             />
           </div>
-        )}
+        ) : null}
         <div className="text-left min-w-0">
           <p className="text-[8px] font-semibold uppercase tracking-widest leading-none mb-0.5 text-gray-400">
             {label}
           </p>
-          <p className="text-[11px] font-semibold truncate leading-tight text-gray-600 max-w-28">
-            {isEmpty ? `No ${label.toLowerCase()}` : (selected?.label ?? value)}
-          </p>
+          <div className="flex items-center gap-1">
+            <p className="text-[11px] font-semibold truncate leading-tight text-gray-600 max-w-28">
+              {isEmpty
+                ? `No ${label.toLowerCase()}`
+                : (selected?.label ?? value)}
+            </p>
+            {!isEmpty && selected?.badge && (
+              <span className="shrink-0 text-[8px] font-bold uppercase tracking-wide px-1 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 leading-none">
+                {selected.badge}
+              </span>
+            )}
+          </div>
         </div>
         {canSwitch && (
           <svg
@@ -139,15 +151,22 @@ export function HeaderPicker({
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                 >
-                  <LogoAvatar
-                    assetId={opt.imageAssetId}
-                    fallback={initials(opt.label)}
-                    className="rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-gray-100 text-gray-500"
-                    size={22}
-                  />
+                  {!hideIcon && (
+                    <LogoAvatar
+                      assetId={opt.imageAssetId}
+                      fallback={initials(opt.label)}
+                      className="rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-gray-100 text-gray-500"
+                      size={22}
+                    />
+                  )}
                   <span className="flex-1 text-sm font-medium truncate">
                     {opt.label}
                   </span>
+                  {opt.badge && (
+                    <span className="shrink-0 text-[8px] font-bold uppercase tracking-wide px-1 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 leading-none">
+                      {opt.badge}
+                    </span>
+                  )}
                   {isActive && (
                     <svg
                       className="w-3.5 h-3.5 text-gray-400 shrink-0"

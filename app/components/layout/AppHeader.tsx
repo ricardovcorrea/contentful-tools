@@ -24,7 +24,7 @@ interface Props {
   spaceOptions: HeaderPickerOption[];
   onSpaceChange: (id: string) => void;
   environmentId: string;
-  environments: { id: string; name: string }[];
+  environments: { id: string; name: string; aliasedToMaster?: boolean }[];
   currentUser: CurrentUser;
   isLoading: boolean;
   onEnvChange: (id: string) => void;
@@ -69,6 +69,19 @@ export function AppHeader({
   const [createNewInitialType, setCreateNewInitialType] = useState<
     "opco" | "partner" | undefined
   >(undefined);
+  const [masterConfirmOpen, setMasterConfirmOpen] = useState(false);
+
+  const isMasterEnv = environments.some(
+    (e) => e.id === environmentId && e.aliasedToMaster,
+  );
+
+  const handleEditModeToggle = () => {
+    if (!editMode && isMasterEnv) {
+      setMasterConfirmOpen(true);
+    } else {
+      toggleEditMode();
+    }
+  };
 
   const openCreateNew = (type?: "opco" | "partner") => {
     setCreateNewInitialType(type);
@@ -102,13 +115,6 @@ export function AppHeader({
           <div className="hidden sm:flex items-center gap-0.5 lg:gap-0.5 xl:gap-1 shrink-0">
             {/* Space display — read-only */}
             <div className="flex items-center gap-1.5 lg:gap-1 px-2 py-1 lg:px-1.5 lg:py-1 xl:px-2.5 xl:py-1.5 rounded-lg border border-gray-200 bg-gray-100/60 cursor-default">
-              <span className="flex items-center justify-center w-5 h-5 rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-white text-gray-500">
-                {spaceName
-                  .split(/[\s_\-]+/)
-                  .slice(0, 2)
-                  .map((w: string) => w[0]?.toUpperCase() ?? "")
-                  .join("")}
-              </span>
               <div className="text-left min-w-0">
                 <p className="text-[8px] font-semibold uppercase tracking-widest leading-none mb-0.5 text-gray-400">
                   Space
@@ -125,10 +131,12 @@ export function AppHeader({
               options={environments.map((e) => ({
                 value: e.id,
                 label: e.name,
+                badge: e.aliasedToMaster ? "master" : undefined,
               }))}
               onChange={onEnvChange}
               disabled={isLoading}
               theme="blue"
+              hideIcon
             />
             <div className="w-px h-7 bg-gray-200" />
             <div data-tour="opco-picker">
@@ -164,11 +172,13 @@ export function AppHeader({
           {/* Edit mode toggle */}
           <button
             data-tour="edit-mode"
-            onClick={toggleEditMode}
+            onClick={handleEditModeToggle}
             title={
               editMode
                 ? "Editing mode on — click to switch to view-only"
-                : "View-only mode — click to enable editing"
+                : isMasterEnv
+                  ? "View-only mode — this environment is aliased to master"
+                  : "View-only mode — click to enable editing"
             }
             className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
               editMode
@@ -297,6 +307,73 @@ export function AppHeader({
         selectedPartner={selectedPartner}
         initialType={createNewInitialType}
       />
+
+      {/* Master-env edit mode confirm modal */}
+      {masterConfirmOpen && (
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg xl:max-w-xl mx-4 bg-white rounded-2xl border border-amber-200 shadow-2xl shadow-black/20 overflow-hidden">
+            {/* Header */}
+            <div className="bg-amber-50 border-b border-amber-100 px-6 py-5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <svg
+                  className="w-5 h-5 text-amber-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                  />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-800">
+                  Editing on master environment
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  This environment is aliased to{" "}
+                  <span className="font-bold">master</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 flex flex-col gap-5">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                You are about to enable{" "}
+                <span className="font-semibold">edit mode</span> on an
+                environment that is aliased to{" "}
+                <span className="font-semibold text-amber-700">master</span>.
+                Any changes you publish will affect your{" "}
+                <span className="font-semibold">live production content</span>.
+              </p>
+              <p className="text-sm text-gray-500">
+                Are you sure you want to proceed?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setMasterConfirmOpen(false)}
+                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-semibold py-2.5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setMasterConfirmOpen(false);
+                    toggleEditMode();
+                  }}
+                  className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-semibold py-2.5 transition-colors"
+                >
+                  Enable editing
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

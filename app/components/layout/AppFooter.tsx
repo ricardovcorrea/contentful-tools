@@ -1,19 +1,50 @@
-import { useState } from "react";
-import { formatCacheTime } from "~/lib/format";
+import { useState, useEffect } from "react";
 import { CacheInspectorModal } from "./CacheInspectorModal";
+
+// Keep in sync with SESSION_INACTIVITY_MS in home.tsx.
+const SESSION_INACTIVITY_DISPLAY = "2 hours";
+
+function useSessionCountdown(expiresAt: number | null): string | null {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expiresAt) return;
+
+    const update = () => {
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        setLabel("Expiring…");
+        return;
+      }
+      const totalSecs = Math.ceil(remaining / 1000);
+      const h = Math.floor(totalSecs / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      const s = totalSecs % 60;
+      if (h > 0) {
+        setLabel(`${h}h ${m}m`);
+      } else if (m > 0) {
+        setLabel(`${m}m ${s}s`);
+      } else {
+        setLabel(`${s}s`);
+      }
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  return label;
+}
 
 interface Props {
   maskedToken: string;
-  cacheLastUpdated: number | null;
-  isInactive?: boolean;
+  sessionExpiresAt?: number | null;
 }
 
-export function AppFooter({
-  maskedToken,
-  cacheLastUpdated,
-  isInactive = false,
-}: Props) {
+export function AppFooter({ maskedToken, sessionExpiresAt = null }: Props) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const countdown = useSessionCountdown(sessionExpiresAt ?? null);
 
   return (
     <>
@@ -32,18 +63,25 @@ export function AppFooter({
           {maskedToken}
         </span>
         <div className="flex items-center gap-4 sm:gap-6 ml-auto">
-          {isInactive && (
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
-              </span>
-              Inactive
-            </span>
-          )}
-          {cacheLastUpdated && (
-            <span className="text-xs text-gray-700 tabular-nums tracking-tight">
-              Cache updated {formatCacheTime(cacheLastUpdated)}
+          {countdown !== null && (
+            <span
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-500"
+              title={`Auto-logout due to inactivity in ${countdown}. Sessions expire after ${SESSION_INACTIVITY_DISPLAY} of no activity.`}
+            >
+              <svg
+                className="w-3 h-3 shrink-0 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Inactivity logout in {countdown}
             </span>
           )}
           <button

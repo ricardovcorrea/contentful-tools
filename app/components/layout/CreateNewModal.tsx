@@ -1506,7 +1506,7 @@ export function CreateNewModal({
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[90vh] flex flex-col mx-4"
+        className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl max-h-[90vh] flex flex-col mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

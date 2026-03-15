@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import React from "react";
 import { queryClient } from "~/lib/query-client";
+import { getCacheLastUpdated } from "~/lib/contentful/cache";
+import { formatCacheTime } from "~/lib/format";
 import type { Query } from "@tanstack/react-query";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -300,30 +302,20 @@ export function CacheInspectorModal({ open, onClose }: Props) {
     return unsub;
   }, [open, tick, buildRows]);
 
-  // Auto-expand everything when a search is active, collapse all when cleared.
+  // Auto-expand everything when a search is active; collapse all when cleared.
   useEffect(() => {
     if (search.trim()) {
-      // Expand all nodes so matches are visible.
       const tree = buildTree(filtered);
       setExpandedPaths(new Set(allPathKeys(tree)));
     } else {
-      // Reset to top-level-only expansion.
-      const tree = buildTree(filtered);
-      setExpandedPaths(
-        new Set([...tree.children.values()].map((c) => c.pathKey)),
-      );
+      setExpandedPaths(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, activeGroup]);
 
-  // Expand top-level nodes on first open.
+  // Collapse all when the modal closes.
   useEffect(() => {
-    if (!open) return;
-    const tree = buildTree(rows);
-    setExpandedPaths(
-      new Set([...tree.children.values()].map((c) => c.pathKey)),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!open) setExpandedPaths(new Set());
   }, [open]);
 
   // Relative-time ticker
@@ -400,8 +392,9 @@ export function CacheInspectorModal({ open, onClose }: Props) {
 
   const handleClearAll = useCallback(() => {
     queryClient.clear();
-    buildRows();
-  }, [buildRows]);
+    // Full page reload so the app re-fetches all data from Contentful.
+    window.location.reload();
+  }, []);
 
   const handleClearFiltered = useCallback(() => {
     for (const row of filtered) {
@@ -488,8 +481,8 @@ export function CacheInspectorModal({ open, onClose }: Props) {
                     </span>
                   )}
                 </button>
-                {/* Per-branch actions — visible on row hover */}
-                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 pr-2 transition-opacity">
+                {/* Per-branch actions */}
+                <div className="flex items-center gap-0.5 pr-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -689,7 +682,7 @@ export function CacheInspectorModal({ open, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[9998] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-9998 flex items-end sm:items-center justify-center p-0 sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -701,7 +694,7 @@ export function CacheInspectorModal({ open, onClose }: Props) {
       />
 
       {/* panel */}
-      <div className="relative z-10 w-full sm:w-[720px] max-w-full bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 flex flex-col h-[90vh]">
+      <div className="relative z-10 w-full sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 flex flex-col h-[90vh]">
         {/* header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
           <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200/60 flex items-center justify-center shrink-0">
@@ -730,6 +723,12 @@ export function CacheInspectorModal({ open, onClose }: Props) {
             </h2>
             <p className="text-[10px] text-gray-400 mt-0.5">
               {rows.length} cached queries · {filtered.length} visible
+              {(() => {
+                const t = getCacheLastUpdated();
+                return t
+                  ? ` · Updated ${formatCacheTime(t)}`
+                  : " · Not yet loaded";
+              })()}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -801,7 +800,7 @@ export function CacheInspectorModal({ open, onClose }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           {/* search */}
-          <div className="relative flex-1 min-w-[160px]">
+          <div className="relative flex-1 min-w-40">
             <svg
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
               fill="none"
