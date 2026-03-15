@@ -52,7 +52,7 @@ export default function LocaleDetailPage() {
 
   if (!locale) {
     return (
-      <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+      <main className="flex-1 overflow-y-auto p-6 sm:p-8 bg-gray-50">
         <div className="pt-16 text-gray-600 text-sm">Locale not found.</div>
       </main>
     );
@@ -63,51 +63,49 @@ export default function LocaleDetailPage() {
     : null;
 
   return (
-    <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+    <main className="flex-1 overflow-y-auto p-6 sm:p-8 bg-gray-50">
       {/* Header */}
-      <div className="mb-4">
-        <span className="text-xs font-semibold text-sky-600 bg-sky-500/15 px-2 py-0.5 rounded-full">
-          Locale
-        </span>
-        <div className="mt-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              {locale.name}
-              {locale.default && (
-                <span className="text-[10px] font-bold uppercase tracking-wide bg-sky-500/10 text-sky-600 border border-sky-200/60 px-1.5 py-0.5 rounded-full">
-                  Default
-                </span>
-              )}
-              {locale.optional && (
-                <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-600 border border-amber-200/60 px-1.5 py-0.5 rounded-full">
-                  Optional
-                </span>
-              )}
-            </h2>
-            <a
-              href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/locales`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-            >
-              <svg
-                className="w-3.5 h-3.5 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                />
-              </svg>
-              Open in Contentful
-            </a>
-          </div>
-          <p className="text-xs text-gray-500 mt-1 font-mono">{locale.code}</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
+            Locale
+          </p>
+          <h1 className="text-2xl font-bold text-gray-900 leading-tight flex items-center gap-2">
+            {locale.name}
+            {locale.default && (
+              <span className="text-[10px] font-bold uppercase tracking-wide bg-sky-500/10 text-sky-600 border border-sky-200/60 px-1.5 py-0.5 rounded-full">
+                Default
+              </span>
+            )}
+            {locale.optional && (
+              <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-600 border border-amber-200/60 px-1.5 py-0.5 rounded-full">
+                Optional
+              </span>
+            )}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1 font-mono">{locale.code}</p>
         </div>
+        <a
+          href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/locales`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors shrink-0"
+        >
+          <svg
+            className="w-3.5 h-3.5 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            />
+          </svg>
+          Open in Contentful
+        </a>
       </div>
 
       {/* Fields */}

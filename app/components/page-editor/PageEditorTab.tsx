@@ -12,6 +12,7 @@ import { getEntry } from "~/lib/contentful/get-entry";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
 import { useToast } from "~/lib/toast";
 import { useEditMode as useGlobalEditMode } from "~/lib/edit-mode";
+import { RichTextRenderer } from "~/components/RichTextRenderer";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -842,14 +843,15 @@ function ContentfulLink({
 
 // ── Field display ─────────────────────────────────────────────────────────
 
-function renderFieldValue(val: any): string | null {
+function renderFieldValue(val: any): React.ReactNode | null {
   if (val === null || val === undefined) return null;
   if (typeof val === "boolean") return val ? "true" : "false";
   if (typeof val === "number") return String(val);
   if (typeof val === "string")
     return val.length > 120 ? val.slice(0, 120) + "…" : val;
   if (typeof val === "object") {
-    if ("nodeType" in val) return "(rich text)";
+    if ("nodeType" in val && (val as any).nodeType === "document")
+      return <RichTextRenderer doc={val} compact />;
     if (val?.sys?.type === "Link" && val?.sys?.linkType === "Asset")
       return "(asset)";
     if (val?.sys?.type === "Link") return `→ ${val.sys.id}`;
@@ -871,9 +873,8 @@ function FieldsDisplay({
 }) {
   const rows: Array<{
     key: string;
-    value: string;
+    value: React.ReactNode;
     isRef: boolean;
-    isRich: boolean;
   }> = [];
 
   for (const [fieldId, localeMap] of Object.entries(fields)) {
@@ -881,24 +882,15 @@ function FieldsDisplay({
       (localeMap as any)?.[locale] ??
       (Object.values((localeMap as any) ?? {}) as any[])[0];
     const rendered = renderFieldValue(val);
-    if (!rendered) continue;
+    if (rendered === null || rendered === undefined) continue;
 
     const isRef =
-      typeof val === "object" &&
-      !Array.isArray(val) &&
-      (val?.sys?.type === "Link" ||
-        (Array.isArray(val) && val[0]?.sys?.type === "Link"));
-    const isRich =
-      typeof val === "object" && !Array.isArray(val) && "nodeType" in val;
-    const isLinkArr =
-      Array.isArray(val) && val.length > 0 && val[0]?.sys?.type === "Link";
+      (typeof val === "object" &&
+        !Array.isArray(val) &&
+        val?.sys?.type === "Link") ||
+      (Array.isArray(val) && val.length > 0 && val[0]?.sys?.type === "Link");
 
-    rows.push({
-      key: fieldId,
-      value: rendered,
-      isRef: isRef || isLinkArr,
-      isRich,
-    });
+    rows.push({ key: fieldId, value: rendered, isRef });
   }
 
   if (rows.length === 0)
@@ -906,7 +898,7 @@ function FieldsDisplay({
 
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 w-full">
-      {rows.map(({ key, value, isRef, isRich }) => (
+      {rows.map(({ key, value, isRef }) => (
         <>
           <dt
             key={`dt-${key}`}
@@ -917,11 +909,7 @@ function FieldsDisplay({
           <dd
             key={`dd-${key}`}
             className={`text-xs wrap-break-word ${
-              isRef
-                ? "text-gray-400 italic"
-                : isRich
-                  ? "text-gray-400 italic"
-                  : "text-gray-700"
+              isRef ? "text-gray-400 italic" : "text-gray-700"
             }`}
           >
             {value}

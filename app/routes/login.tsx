@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   clearContentfulManagementClient,
@@ -35,6 +35,14 @@ export default function Login() {
 
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showInactivityBanner, setShowInactivityBanner] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem("loggedOutReason") === "inactivity") {
+      localStorage.removeItem("loggedOutReason");
+      setShowInactivityBanner(true);
+    }
+  }, []);
 
   // ── Step 1: validate token + load spaces ─────────────────────────────────
   const handleTokenSubmit = async (e: React.FormEvent) => {
@@ -122,6 +130,47 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <div className="flex flex-1 items-center justify-center p-6 sm:p-8">
         <div className="w-full max-w-md flex flex-col gap-8">
+          {/* Inactivity banner */}
+          {showInactivityBanner && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5">
+              <svg
+                className="w-4 h-4 shrink-0 mt-0.5 text-amber-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                />
+              </svg>
+              <p className="flex-1 text-sm font-semibold text-amber-800 leading-snug">
+                You were signed out due to inactivity.
+              </p>
+              <button
+                onClick={() => setShowInactivityBanner(false)}
+                className="shrink-0 rounded-md p-1 text-amber-700 opacity-60 hover:opacity-100 hover:bg-amber-100 transition-all"
+                aria-label="Dismiss"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
+
           {/* Logo */}
           <div className="flex flex-col items-center gap-2">
             <div className="w-16 h-16 rounded-2xl bg-blue-500 flex items-center justify-center shadow-md shadow-blue-500/30">

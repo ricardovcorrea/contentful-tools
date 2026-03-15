@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useRouteLoaderData } from "react-router";
 import { getAsset } from "~/lib/contentful/get-asset";
 import { getEntry } from "~/lib/contentful/get-entry";
-import { isRichText, extractRichTextPlain } from "~/lib/rich-text";
+import { isRichText } from "~/lib/rich-text";
+import { RichTextRenderer } from "~/components/RichTextRenderer";
 
 // ── Asset helpers ─────────────────────────────────────────────────────────
 
@@ -246,16 +247,9 @@ export function CellValue({
       </span>
     );
   }
-  // Contentful Rich Text Document — render as readable plain text
+  // Contentful Rich Text Document — render with full formatting
   if (isRichText(value)) {
-    const text = extractRichTextPlain(value).trim();
-    return text ? (
-      <span className="text-gray-700 text-sm wrap-break-word whitespace-pre-wrap leading-relaxed">
-        {text}
-      </span>
-    ) : (
-      <span className="text-gray-400 italic text-xs">empty rich text</span>
-    );
+    return <RichTextRenderer doc={value} compact />;
   }
   if (typeof value === "object" && value !== null) {
     const sys = (value as any)?.sys;

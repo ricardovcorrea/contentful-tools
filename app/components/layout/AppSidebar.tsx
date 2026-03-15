@@ -55,6 +55,85 @@ function getName(fields: Record<string, any>, locale: string) {
   return name || null;
 }
 
+/**
+ * Shorten an entry display name:
+ * - 4+ segments: always drop the first two.
+ * - 3 segments: drop the first two if any of the first two parts matches a
+ *   known name (opco / partner), case-insensitive.
+ * e.g. "Iberia - LeShuttle - Review Order - Page" (4) → "Review Order - Page"
+ *      "Iberia - LeShuttle - Page" (3, knownNames=["LeShuttle"]) → "Page"
+ */
+function shortenEntryName(
+  name: string | null,
+  knownNames: string[] = [],
+): string | null {
+  if (!name) return name;
+  const parts = name.split(" - ");
+  if (parts.length >= 4) return parts.slice(2).join(" - ");
+  if (parts.length === 3) {
+    const lower = knownNames.map((n) => n.toLowerCase());
+    const firstTwo = [parts[0].toLowerCase(), parts[1].toLowerCase()];
+    if (firstTwo.some((p) => lower.includes(p)))
+      return parts.slice(2).join(" - ");
+  }
+  return name;
+}
+
+/**
+ * Renders a label split by the first " - " as a badge + rest.
+ * e.g. "Layout - Container" → <badge>Layout</badge> Container
+ * Labels without " - " are rendered as-is.
+ */
+function RefGroupLabel({ label }: { label: string }) {
+  const idx = label.indexOf(" - ");
+  if (idx === -1) return <span>{label}</span>;
+  const prefix = label.slice(0, idx).trim();
+  const rest = label.slice(idx + 3).trim();
+  return (
+    <span className="flex items-center gap-1.5 min-w-0 flex-wrap">
+      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded bg-gray-200/80 text-gray-500">
+        {prefix}
+      </span>
+      <span className="break-words min-w-0">{rest}</span>
+    </span>
+  );
+}
+
+/** Everything before the first " - ", or empty string if no " - " exists */
+function labelPrefix(label: string): string {
+  const idx = label.indexOf(" - ");
+  return idx !== -1 ? label.slice(0, idx).trim() : "";
+}
+
+/**
+ * Priority order for known label prefixes (lower = higher up in the list).
+ * Labels without any prefix (no " - ") get priority 0 (very top).
+ * Known prefixes follow; anything else falls to 99.
+ */
+const PREFIX_PRIORITY: Record<string, number> = {
+  "": 0, // no prefix → top
+  layout: 1,
+  generic: 2,
+  component: 3,
+  container: 4,
+};
+
+function prefixPriority(prefix: string): number {
+  return PREFIX_PRIORITY[prefix.toLowerCase()] ?? 99;
+}
+
+function sortRefGroups<T extends { label: string }>(groups: T[]): T[] {
+  return [...groups].sort((a, b) => {
+    const pa = labelPrefix(a.label);
+    const pb = labelPrefix(b.label);
+    const prioA = prefixPriority(pa);
+    const prioB = prefixPriority(pb);
+    if (prioA !== prioB) return prioA - prioB;
+    // Within same priority bucket: sort alphabetically by full label
+    return a.label.localeCompare(b.label);
+  });
+}
+
 function resolveLogoId(
   fields: Record<string, any> | undefined,
   locale: string,
@@ -105,6 +184,9 @@ export function AppSidebar({
   const envShouldBeOpen =
     pathname === "/environment" ||
     pathname === "/assets" ||
+    pathname === "/sitemap" ||
+    pathname === "/unpublished" ||
+    pathname === "/scheduled" ||
     pathname.startsWith("/locales");
   const [envExpanded, setEnvExpanded] = useState<boolean>(true);
   const [localesExpanded, setLocalesExpanded] = useState<boolean>(false);
@@ -137,6 +219,26 @@ export function AppSidebar({
       partnerRefGroups.some((g) =>
         g.items.some((i: any) => i.sys.id === entryId),
       ));
+
+  const opcoDisplayName =
+    getName(
+      opcos.items.find(
+        (o: any) =>
+          (resolveStringField(o.fields["id"], firstLocale) || o.sys.id) ===
+          selectedOpco,
+      )?.fields ?? {},
+      firstLocale,
+    ) ?? selectedOpco;
+
+  const partnerDisplayName =
+    getName(
+      opcoPartners.items.find(
+        (p: any) =>
+          (resolveStringField(p.fields["id"], firstLocale) || p.sys.id) ===
+          selectedPartner,
+      )?.fields ?? {},
+      firstLocale,
+    ) ?? selectedPartner;
 
   useEffect(() => {
     if (localeActive) setLocalesExpanded(true);
@@ -268,6 +370,81 @@ export function AppSidebar({
                   </svg>
                   <span className="text-[9px] font-semibold leading-none">
                     Assets
+                  </span>
+                </button>
+                <button
+                  onClick={() => onNavigate("/sitemap")}
+                  className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    pathname === "/sitemap"
+                      ? "bg-sky-500/20 text-sky-700"
+                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
+                  }`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                    />
+                  </svg>
+                  <span className="text-[9px] font-semibold leading-none">
+                    Sitemap
+                  </span>
+                </button>
+                <button
+                  onClick={() => onNavigate("/unpublished")}
+                  className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    pathname === "/unpublished"
+                      ? "bg-amber-500/20 text-amber-700"
+                      : "text-gray-500 hover:bg-amber-500/10 hover:text-amber-600"
+                  }`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                  <span className="text-[9px] font-semibold leading-none">
+                    Unpub
+                  </span>
+                </button>
+                <button
+                  onClick={() => onNavigate("/scheduled")}
+                  className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                    pathname === "/scheduled"
+                      ? "bg-sky-500/20 text-sky-700"
+                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
+                  }`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span className="text-[9px] font-semibold leading-none">
+                    Sched
                   </span>
                 </button>
                 <button
@@ -681,6 +858,93 @@ export function AppSidebar({
                     </span>
                   </button>
 
+                  {/* Sitemap */}
+                  <button
+                    onClick={() => onNavigate("/sitemap")}
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      pathname === "/sitemap"
+                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
+                      <svg
+                        className="w-3 h-3 text-sky-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600">
+                      Sitemap
+                    </span>
+                  </button>
+
+                  {/* Unpublished */}
+                  <button
+                    onClick={() => onNavigate("/unpublished")}
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      pathname === "/unpublished"
+                        ? "border-amber-500 bg-amber-500/10 text-amber-700"
+                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-md border border-amber-400/20 flex items-center justify-center shrink-0">
+                      <svg
+                        className="w-3 h-3 text-amber-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600 flex-1">
+                      Unpublished
+                    </span>
+                  </button>
+
+                  {/* Scheduled */}
+                  <button
+                    onClick={() => onNavigate("/scheduled")}
+                    className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
+                      pathname === "/scheduled"
+                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
+                        : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
+                      <svg
+                        className="w-3 h-3 text-sky-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600 flex-1">
+                      Scheduled
+                    </span>
+                  </button>
+
                   <button
                     onClick={() => setLocalesExpanded((p) => !p)}
                     className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
@@ -1051,8 +1315,10 @@ export function AppSidebar({
                                         <p
                                           className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                         >
-                                          {getName(page.fields, firstLocale) ??
-                                            page.sys.id}
+                                          {shortenEntryName(
+                                            getName(page.fields, firstLocale),
+                                            [opcoDisplayName],
+                                          ) ?? page.sys.id}
                                         </p>
                                         <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
                                           {page.sys.id}
@@ -1135,8 +1401,10 @@ export function AppSidebar({
                                         <p
                                           className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                         >
-                                          {getName(msg.fields, firstLocale) ??
-                                            msg.sys.id}
+                                          {shortenEntryName(
+                                            getName(msg.fields, firstLocale),
+                                            [opcoDisplayName],
+                                          ) ?? msg.sys.id}
                                         </p>
                                         <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
                                           {msg.sys.id}
@@ -1150,13 +1418,13 @@ export function AppSidebar({
                           </AccordionSection>
                         )}
 
-                        {opcoRefGroups.map((refGroup) => {
+                        {sortRefGroups(opcoRefGroups).map((refGroup) => {
                           if (refGroup.items.length === 0) return null;
                           const overviewPath = `/overview/opco/${refGroup.slug}`;
                           return (
                             <AccordionSection
                               key={`ref-opco-${refGroup.contentTypeId}`}
-                              label={refGroup.label}
+                              label={<RefGroupLabel label={refGroup.label} />}
                               count={refGroup.items.length}
                               expandKey={accordionExpandKey}
                               collapseKey={accordionCollapseKey}
@@ -1223,9 +1491,9 @@ export function AppSidebar({
                                           <p
                                             className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                           >
-                                            {getName(
-                                              item.fields,
-                                              firstLocale,
+                                            {shortenEntryName(
+                                              getName(item.fields, firstLocale),
+                                              [opcoDisplayName],
                                             ) ?? item.sys.id}
                                           </p>
                                           <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
@@ -1367,9 +1635,12 @@ export function AppSidebar({
                                           <p
                                             className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                           >
-                                            {getName(
-                                              page.fields,
-                                              firstLocale,
+                                            {shortenEntryName(
+                                              getName(page.fields, firstLocale),
+                                              [
+                                                opcoDisplayName,
+                                                partnerDisplayName,
+                                              ],
                                             ) ?? page.sys.id}
                                           </p>
                                           <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
@@ -1453,8 +1724,13 @@ export function AppSidebar({
                                           <p
                                             className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                           >
-                                            {getName(msg.fields, firstLocale) ??
-                                              msg.sys.id}
+                                            {shortenEntryName(
+                                              getName(msg.fields, firstLocale),
+                                              [
+                                                opcoDisplayName,
+                                                partnerDisplayName,
+                                              ],
+                                            ) ?? msg.sys.id}
                                           </p>
                                           <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
                                             {msg.sys.id}
@@ -1539,9 +1815,15 @@ export function AppSidebar({
                                           <p
                                             className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                           >
-                                            {getName(
-                                              email.fields,
-                                              firstLocale,
+                                            {shortenEntryName(
+                                              getName(
+                                                email.fields,
+                                                firstLocale,
+                                              ),
+                                              [
+                                                opcoDisplayName,
+                                                partnerDisplayName,
+                                              ],
                                             ) ?? email.sys.id}
                                           </p>
                                           <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">
@@ -1556,13 +1838,13 @@ export function AppSidebar({
                             </AccordionSection>
                           )}
 
-                          {partnerRefGroups.map((refGroup) => {
+                          {sortRefGroups(partnerRefGroups).map((refGroup) => {
                             if (refGroup.items.length === 0) return null;
                             const overviewPath = `/overview/partner/${refGroup.slug}`;
                             return (
                               <AccordionSection
                                 key={`ref-partner-${refGroup.contentTypeId}`}
-                                label={refGroup.label}
+                                label={<RefGroupLabel label={refGroup.label} />}
                                 count={refGroup.items.length}
                                 expandKey={accordionExpandKey}
                                 collapseKey={accordionCollapseKey}
@@ -1633,9 +1915,15 @@ export function AppSidebar({
                                             <p
                                               className={`text-sm font-medium leading-tight break-words ${active ? "text-blue-700" : "text-gray-700"}`}
                                             >
-                                              {getName(
-                                                item.fields,
-                                                firstLocale,
+                                              {shortenEntryName(
+                                                getName(
+                                                  item.fields,
+                                                  firstLocale,
+                                                ),
+                                                [
+                                                  opcoDisplayName,
+                                                  partnerDisplayName,
+                                                ],
                                               ) ?? item.sys.id}
                                             </p>
                                             <p className="text-[11px] font-mono text-gray-600 truncate mt-0.5">

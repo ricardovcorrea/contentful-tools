@@ -1,7 +1,7 @@
 import { getOpcoPartnerPages } from "~/lib/contentful/get-opco-partner-pages";
 import { getEntryTree, type RefGroup } from "~/lib/contentful/get-entry-tree";
 import type { Route } from "./+types/home";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AppHeader } from "~/components/layout/AppHeader";
 import { AppSidebar } from "~/components/layout/AppSidebar";
 import { AppFooter } from "~/components/layout/AppFooter";
@@ -10,7 +10,6 @@ import { EditModeProvider } from "~/lib/edit-mode";
 import {
   dispatchLoadStep,
   dispatchLoadComplete,
-  dispatchLoadDetail,
   LoadingScreen,
 } from "~/components/loading-screen";
 import {
@@ -84,7 +83,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     spaceObj: any,
     spacesCollection: any;
   dispatchLoadStep(0);
-  dispatchLoadDetail(["OPCOs list", "Locales", "Current user", "Space info"]);
   try {
     [opcos, locales, currentUser, spaceObj, spacesCollection] =
       await Promise.all([
@@ -203,11 +201,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   // none depend on each other; opcoId is already known from step 0.
   let envObj: any, environmentsList: any, opcoPartners: any;
   dispatchLoadStep(1);
-  dispatchLoadDetail([
-    `Environment: ${environment}`,
-    `Partners for ${opcoId}`,
-    "Available environments",
-  ]);
   try {
     [envObj, environmentsList, opcoPartners] = await Promise.all([
       withCache(`env:${spaceId}:${environment}`, () =>
@@ -278,13 +271,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     partnerMessages: any,
     partnerEmails: any;
   dispatchLoadStep(2);
-  dispatchLoadDetail([
-    `Pages for ${opcoId}`,
-    `Messages for ${opcoId}`,
-    `Pages for partner ${partnerId}`,
-    `Messages for partner ${partnerId}`,
-    `Emails for partner ${partnerId}`,
-  ]);
   try {
     [opcoPages, opcoMessages, partnerPages, partnerMessages, partnerEmails] =
       await Promise.all([
@@ -324,10 +310,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   // Step 3: build OPCO + partner content trees in parallel (was sequential)
   dispatchLoadStep(3);
-  dispatchLoadDetail([
-    `OPCO tree — ${opcoPageIds.length} root page${opcoPageIds.length !== 1 ? "s" : ""}`,
-    `Partner tree — ${partnerPageIds.length} root page${partnerPageIds.length !== 1 ? "s" : ""}`,
-  ]);
   const [opcoRefGroups, partnerRefGroups]: [RefGroup[], RefGroup[]] =
     await Promise.all([
       opcoPageIds.length > 0
@@ -359,7 +341,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       ...partnerRefGroups.map((g) => g.contentTypeId),
     ]),
   ];
-  dispatchLoadDetail(uniqueCtIds.map((id) => `Content type: ${id}`));
   const ctResults = await Promise.all(
     uniqueCtIds.map((id) =>
       getContentType(id)
@@ -393,7 +374,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const scheduledActions = await scheduledActionsPromise;
 
   dispatchLoadStep(5);
-  dispatchLoadDetail(["Applying locale filters", "Finalising workspace"]);
 
   // Mark all steps done, wait 3s so the user can read the loading feedback.
   dispatchLoadComplete();
@@ -443,8 +423,18 @@ export function ErrorBoundary() {
     error?.data ??
     (typeof error === "string" ? error : "An unexpected error occurred.");
 
-  // Clear all auth credentials immediately whenever this boundary renders.
+  // Only clear credentials for actual auth/API failures, not JS runtime errors
+  // (e.g. ReferenceError, TypeError thrown during rendering).
+  const status = error?.status ?? error?.statusCode ?? 0;
+  const isAuthError =
+    status === 401 ||
+    status === 403 ||
+    /unauthorized|forbidden|invalid.*token|access.*token|api.*key/i.test(
+      message,
+    );
+
   useEffect(() => {
+    if (!isAuthError) return;
     localStorage.removeItem("contentfulManagementToken");
     localStorage.removeItem("contentfulSpaceId");
     localStorage.removeItem("contentfulEnvironment");
@@ -452,7 +442,7 @@ export function ErrorBoundary() {
     localStorage.removeItem("selectedPartner");
     clearCache();
     clearContentfulManagementClient();
-  }, []);
+  }, [isAuthError]);
 
   return (
     <div className="h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -475,9 +465,13 @@ export function ErrorBoundary() {
             </svg>
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-red-700">Loading failed</p>
+            <p className="text-sm font-semibold text-red-700">
+              {isAuthError ? "Loading failed" : "Something went wrong"}
+            </p>
             <p className="text-xs text-red-500 mt-0.5">
-              Your credentials have been cleared.
+              {isAuthError
+                ? "Your credentials have been cleared."
+                : "A page error occurred. Your session is intact."}
             </p>
           </div>
         </div>
@@ -489,10 +483,12 @@ export function ErrorBoundary() {
           </p>
 
           <button
-            onClick={() => navigate("/login", { replace: true })}
+            onClick={() =>
+              isAuthError ? navigate("/login", { replace: true }) : navigate(-1)
+            }
             className="w-full rounded-lg bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white text-sm font-semibold py-3 transition-colors"
           >
-            Sign in again
+            {isAuthError ? "Sign in again" : "Go back"}
           </button>
         </div>
       </div>
@@ -668,6 +664,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const [partnerExpanded, setPartnerExpanded] = useState(shouldExpandPartner);
   const [sidebarResetKey, setSidebarResetKey] = useState(0);
   const [showFullLoading, setShowFullLoading] = useState(false);
+  const [isInactive, setIsInactive] = useState(false);
 
   useEffect(() => {
     if (shouldExpandOpco) setOpcoExpanded(true);
@@ -697,6 +694,81 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [navigate]);
+
+  // Two-stage auto-logout:
+  //   Stage 1 — after INACTIVE_AFTER_MS of no input → show "Inactive" badge in footer
+  //   Stage 2 — after a further (LOGOUT_AFTER_MS − INACTIVE_AFTER_MS) → force logout
+  const INACTIVE_AFTER_MS = 15_000; // 15 seconds → show footer badge
+  const LOGOUT_AFTER_MS = 10 * 60 * 1000; // 10 minutes total → logout
+
+  // Keep a stable ref to navigate so the effect never needs to re-run on
+  // route changes (which would reset the idle timer on every navigation).
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
+  // Refs for both timer stages.
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const logout = () => {
+      setIsInactive(false);
+      localStorage.setItem("loggedOutReason", "inactivity");
+      localStorage.removeItem("contentfulManagementToken");
+      localStorage.removeItem("contentfulSpaceId");
+      localStorage.removeItem("contentfulEnvironment");
+      localStorage.removeItem("selectedOpco");
+      localStorage.removeItem("selectedPartner");
+      navigateRef.current("/login", { replace: true });
+    };
+
+    const markInactive = () => {
+      setIsInactive(true);
+      // Schedule actual logout for the remaining window.
+      inactivityTimer.current = setTimeout(
+        logout,
+        LOGOUT_AFTER_MS - INACTIVE_AFTER_MS,
+      );
+    };
+
+    const resetTimer = () => {
+      setIsInactive(false);
+      if (statusTimer.current) clearTimeout(statusTimer.current);
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      statusTimer.current = setTimeout(markInactive, INACTIVE_AFTER_MS);
+    };
+
+    // Use capture:true so the listeners fire even if a child calls
+    // stopPropagation(), and listen on document (not window) so React's
+    // synthetic event system doesn't swallow anything.
+    const opts = { capture: true, passive: true } as const;
+    const events = [
+      "mousemove",
+      "mousedown",
+      "click",
+      "keydown",
+      "keypress",
+      "touchstart",
+      "touchmove",
+      "scroll",
+      "wheel",
+      "focus",
+    ] as const;
+
+    events.forEach((e) => document.addEventListener(e, resetTimer, opts));
+    resetTimer(); // start the idle clock on mount
+
+    return () => {
+      if (statusTimer.current) clearTimeout(statusTimer.current);
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      events.forEach((e) =>
+        document.removeEventListener(e, resetTimer, { capture: true }),
+      );
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — navigateRef and setIsInactive are stable refs
 
   const rawToken = localStorage.getItem("contentfulManagementToken") ?? "";
   const maskedToken =
@@ -763,7 +835,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
           </div>
         )}
         <div className="min-h-screen bg-gray-200 p-4">
-          <div className="h-[calc(100vh-2rem)] max-w-[1920px] mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
+          <div className="h-[calc(100vh-2rem)] max-w-480 mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
             <AppHeader
               spaceName={spaceName}
               spaceId={spaceId}
@@ -918,6 +990,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
                 navigate(0);
               }}
               cacheTtlMs={CACHE_TTL_MS}
+              isInactive={isInactive}
             />
           </div>
         </div>

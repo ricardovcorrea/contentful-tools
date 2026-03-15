@@ -21,10 +21,10 @@ export default function LocalesPage() {
   const { allLocales: locales, spaceId, environmentId } = parentData;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-gray-50">
+    <main className="flex-1 overflow-y-auto p-6 sm:p-8 bg-gray-50">
       {/* Header */}
       <div className="mb-6">
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
+        <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
           Space configuration
         </p>
         <h1 className="text-2xl font-bold text-gray-900">Locales</h1>
@@ -104,6 +104,6 @@ export default function LocalesPage() {
           </div>
         ))}
       </div>
-    </div>
+    </main>
   );
 }

@@ -15,6 +15,7 @@ export function HeaderPicker({
   disabled,
   onCreateFirst,
   onCreate,
+  createDisabled,
 }: {
   label: string;
   value: string;
@@ -24,6 +25,7 @@ export function HeaderPicker({
   theme?: string; // accepted but ignored — kept for call-site compatibility
   onCreateFirst?: () => void; // kept for backward compat, maps to onCreate
   onCreate?: () => void;
+  createDisabled?: boolean;
 }) {
   const createHandler = onCreate ?? onCreateFirst;
   const [open, setOpen] = useState(false);
@@ -164,10 +166,21 @@ export function HeaderPicker({
             <div className="border-t border-gray-100">
               <button
                 onClick={() => {
+                  if (createDisabled) return;
                   createHandler();
                   setOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                disabled={createDisabled}
+                title={
+                  createDisabled
+                    ? "Enable Edit mode to create entries"
+                    : undefined
+                }
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                  createDisabled
+                    ? "opacity-40 cursor-not-allowed text-gray-400"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                }`}
               >
                 <span className="flex items-center justify-center w-5 h-5 rounded border border-dashed border-gray-300 bg-white text-gray-400 shrink-0">
                   <svg

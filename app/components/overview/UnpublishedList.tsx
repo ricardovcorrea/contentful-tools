@@ -166,9 +166,32 @@ export function UnpublishedList({
 
               {/* Entry info */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">
-                  {name}
-                </p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">
+                    {name}
+                  </p>
+                  <a
+                    href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${item.sys.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded border border-gray-200 text-[10px] font-medium text-gray-400 hover:text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+                  >
+                    <svg
+                      className="w-2.5 h-2.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                    Contentful
+                  </a>
+                </div>
                 <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                   <span className="text-[10px] font-mono text-gray-400">
                     {item.sys.id}
@@ -318,28 +341,6 @@ export function UnpublishedList({
                     </button>
                   );
                 })()}
-
-                <a
-                  href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${item.sys.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-                >
-                  <svg
-                    className="w-3 h-3 shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                  Contentful
-                </a>
               </div>
             </div>
           );

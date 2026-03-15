@@ -138,6 +138,7 @@ export function AppHeader({
               disabled={isLoading}
               theme="violet"
               onCreate={() => openCreateNew("opco")}
+              createDisabled={!editMode}
             />
             <div className="w-px h-7 bg-gray-200" />
             <HeaderPicker
@@ -148,6 +149,7 @@ export function AppHeader({
               disabled={isLoading}
               theme="emerald"
               onCreate={() => openCreateNew("partner")}
+              createDisabled={!editMode}
             />
           </div>
         </div>

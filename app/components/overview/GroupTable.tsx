@@ -88,6 +88,14 @@ export function GroupTable({
     {},
   );
 
+  // Close any open inline editor when edit mode is turned off
+  useEffect(() => {
+    if (!editMode) {
+      setEditingCell(null);
+      setEditingValue("");
+    }
+  }, [editMode]);
+
   const handleSaveInline = useCallback(
     async (entryId: string, fieldId: string, lc: string, value: string) => {
       const ck = `${entryId}|${fieldId}|${lc}`;
@@ -344,7 +352,7 @@ export function GroupTable({
                             const isSaving = savingCell === ck;
                             const cellError = saveCellError[ck];
 
-                            if (isEditing) {
+                            if (isEditing && editMode) {
                               return (
                                 <td
                                   key={lc}
@@ -443,12 +451,18 @@ export function GroupTable({
                             return (
                               <td
                                 key={lc}
-                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 cursor-pointer transition-colors group/cell ${topBorder} ${isLastField ? "pb-3" : ""} ${
+                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 transition-colors group/cell ${topBorder} ${isLastField ? "pb-3" : ""} ${
                                   isLocallySaved
-                                    ? "bg-emerald-50/60 hover:bg-emerald-100/60"
+                                    ? editMode
+                                      ? "bg-emerald-50/60 hover:bg-emerald-100/60 cursor-pointer"
+                                      : "bg-emerald-50/60"
                                     : missing
-                                      ? "bg-red-950/25 hover:bg-blue-50"
-                                      : "hover:bg-blue-50/70"
+                                      ? editMode
+                                        ? "bg-red-950/25 hover:bg-blue-50 cursor-pointer"
+                                        : "bg-red-950/25 cursor-default"
+                                      : editMode
+                                        ? "hover:bg-blue-50/70 cursor-pointer"
+                                        : "cursor-default"
                                 }`}
                                 onClick={(e) => {
                                   if (!editMode) return;
@@ -479,22 +493,28 @@ export function GroupTable({
                                   </span>
                                 ) : missing ? (
                                   <span className="flex items-center justify-between gap-1">
-                                    <span className="text-[10px] text-red-400 italic">
-                                      Click to translate…
-                                    </span>
-                                    <svg
-                                      className="w-3.5 h-3.5 shrink-0 text-red-400 group-hover/cell:text-blue-400 transition-colors"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      strokeWidth={2}
+                                    <span
+                                      className={`text-[10px] italic ${editMode ? "text-red-400" : "text-red-300"}`}
                                     >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                      />
-                                    </svg>
+                                      {editMode
+                                        ? "Click to translate…"
+                                        : "Missing translation"}
+                                    </span>
+                                    {editMode && (
+                                      <svg
+                                        className="w-3.5 h-3.5 shrink-0 text-red-400 group-hover/cell:text-blue-400 transition-colors"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                        />
+                                      </svg>
+                                    )}
                                   </span>
                                 ) : (
                                   <span className="flex items-center justify-between gap-1">
@@ -503,19 +523,21 @@ export function GroupTable({
                                       firstLocale={firstLocale}
                                       fieldId={fieldId}
                                     />
-                                    <svg
-                                      className="w-3 h-3 shrink-0 text-gray-300 group-hover/cell:text-blue-400 transition-colors"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      strokeWidth={2}
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                      />
-                                    </svg>
+                                    {editMode && (
+                                      <svg
+                                        className="w-3 h-3 shrink-0 text-gray-300 group-hover/cell:text-blue-400 transition-colors"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                        />
+                                      </svg>
+                                    )}
                                   </span>
                                 )}
                               </td>

@@ -493,6 +493,14 @@ function GroupTable({
     {},
   );
 
+  // Close any open inline editor when edit mode is turned off
+  useEffect(() => {
+    if (!editMode) {
+      setEditingCell(null);
+      setEditingValue("");
+    }
+  }, [editMode]);
+
   const handleSaveInline = useCallback(
     async (
       entryId: string,
@@ -891,7 +899,7 @@ function GroupTable({
                               );
                             }
 
-                            if (isEditing) {
+                            if (isEditing && editMode) {
                               return (
                                 <td
                                   key={lc}
@@ -924,6 +932,7 @@ function GroupTable({
                                         e.key === "Enter" &&
                                         (e.metaKey || e.ctrlKey)
                                       ) {
+                                        if (!editMode) return;
                                         handleSaveInline(
                                           item.sys.id,
                                           fieldId,
@@ -943,9 +952,12 @@ function GroupTable({
                                   <div className="flex items-center gap-1.5 mt-1.5">
                                     <button
                                       disabled={
-                                        isSaving || !editingValue.trim()
+                                        isSaving ||
+                                        !editingValue.trim() ||
+                                        !editMode
                                       }
                                       onClick={() =>
+                                        editMode &&
                                         handleSaveInline(
                                           item.sys.id,
                                           fieldId,
@@ -999,14 +1011,21 @@ function GroupTable({
                             return (
                               <td
                                 key={lc}
-                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 cursor-pointer transition-colors group/cell ${topBorder} ${isLastField ? "pb-3" : ""} ${
+                                className={`px-4 py-2 align-top border-l border-gray-300/60 max-w-72 transition-colors group/cell ${topBorder} ${isLastField ? "pb-3" : ""} ${
                                   isLocallySaved
-                                    ? "bg-emerald-50/60 hover:bg-emerald-100/60"
+                                    ? editMode
+                                      ? "bg-emerald-50/60 hover:bg-emerald-100/60 cursor-pointer"
+                                      : "bg-emerald-50/60"
                                     : missing
-                                      ? "bg-red-950/25 hover:bg-blue-50"
-                                      : "hover:bg-blue-50/70"
+                                      ? editMode
+                                        ? "bg-red-950/25 hover:bg-blue-50 cursor-pointer"
+                                        : "bg-red-950/25 cursor-default"
+                                      : editMode
+                                        ? "hover:bg-blue-50/70 cursor-pointer"
+                                        : "cursor-default"
                                 }`}
                                 onClick={(e) => {
+                                  if (!editMode) return;
                                   e.stopPropagation();
                                   setEditingCell(ck);
                                   setEditingValue(
@@ -1021,7 +1040,11 @@ function GroupTable({
                                           : "",
                                   );
                                 }}
-                                title={`Click to edit ${fieldId} / ${lc}`}
+                                title={
+                                  editMode
+                                    ? `Click to edit ${fieldId} / ${lc}`
+                                    : "Enable Edit mode to make changes"
+                                }
                               >
                                 {isLocallySaved ? (
                                   <span className="flex items-center gap-1.5">
@@ -1058,19 +1081,21 @@ function GroupTable({
                                       firstLocale={firstLocale}
                                       fieldId={fieldId}
                                     />
-                                    <svg
-                                      className="w-3 h-3 shrink-0 text-gray-300 group-hover/cell:text-blue-400 transition-colors"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      strokeWidth={2}
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                      />
-                                    </svg>
+                                    {editMode && (
+                                      <svg
+                                        className="w-3 h-3 shrink-0 text-gray-300 group-hover/cell:text-blue-400 transition-colors"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                        />
+                                      </svg>
+                                    )}
                                   </span>
                                 )}
                               </td>
@@ -1791,7 +1816,7 @@ export default function OverviewPage() {
 
   return (
     <main className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-8 pt-5">
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 pt-6 sm:px-8">
         <div className="flex items-center gap-4">
           <div
             className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center border ${isOpco ? "bg-violet-500/10 border-violet-300" : "bg-emerald-500/10 border-emerald-300"}`}
@@ -1820,14 +1845,14 @@ export default function OverviewPage() {
           </div>
           <div>
             <p
-              className={`text-xs font-bold uppercase tracking-widest mb-0.5 ${isOpco ? "text-violet-500" : "text-emerald-500"}`}
+              className={`text-xs font-bold uppercase tracking-widest mb-1 ${isOpco ? "text-violet-500" : "text-emerald-500"}`}
             >
               {isOpco ? "OPCO" : "Partner"} · Translation Overview
             </p>
-            <h2 className="text-2xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               {pageTitle.replace(/^(OPCO|Partner) — /, "")}
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
               {scopeLabel} · {totalEntries} entries · {localeCodes.length}{" "}
               locales · only localizable fields shown
             </p>
@@ -1972,7 +1997,7 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      <div className="px-8 py-6">
+      <div className="px-6 py-6 sm:px-8">
         {activeTab === "translations" && (
           <>
             {showPartnerInOpco && (

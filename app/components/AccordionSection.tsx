@@ -11,7 +11,7 @@ export function AccordionSection({
   collapseKey,
   icon,
 }: {
-  label: string;
+  label: ReactNode;
   count: number;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -36,17 +36,17 @@ export function AccordionSection({
     <div className="border-b border-gray-200/50 last:border-0">
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-200/40 transition-colors group border-l-2 border-transparent"
+        className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-gray-200/40 transition-colors group border-l-2 border-transparent"
       >
         {icon && (
-          <span className="shrink-0 flex items-center justify-center w-3.5 h-3.5">
+          <span className="shrink-0 flex items-center justify-center w-3.5 h-3.5 mt-0.5">
             {icon}
           </span>
         )}
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors flex-1">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors flex-1 min-w-0 break-words">
           {label}
         </span>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-2 shrink-0 mt-0.5">
           <span className="text-[11px] text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full">
             {count}
           </span>

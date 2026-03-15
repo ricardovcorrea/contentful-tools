@@ -6,6 +6,7 @@ interface Props {
   isLoading: boolean;
   onRefreshCache: () => void;
   cacheTtlMs: number;
+  isInactive?: boolean;
 }
 
 export function AppFooter({
@@ -14,6 +15,7 @@ export function AppFooter({
   isLoading,
   onRefreshCache,
   cacheTtlMs,
+  isInactive = false,
 }: Props) {
   return (
     <footer className="shrink-0 bg-gray-50 border-t border-gray-200/70 px-3 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 min-h-10">
@@ -27,6 +29,15 @@ export function AppFooter({
         {maskedToken}
       </span>
       <div className="flex items-center gap-4 sm:gap-6 ml-auto">
+        {isInactive && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+            </span>
+            Inactive
+          </span>
+        )}
         {cacheLastUpdated && (
           <span className="text-xs text-gray-700 tabular-nums tracking-tight">
             Cache updated {formatCacheTime(cacheLastUpdated)}
