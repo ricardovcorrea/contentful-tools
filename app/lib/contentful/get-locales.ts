@@ -6,13 +6,14 @@ export const getLocales = () =>
   queryClient.ensureQueryData({
     queryKey: queryKeys.locales(),
     queryFn: async () => {
+      const spaceId = localStorage.getItem("contentfulSpaceId");
+      const environmentId = localStorage.getItem("contentfulEnvironment");
+      if (!spaceId) throw new Error("No space selected");
+      if (!environmentId) throw new Error("No environment selected");
+
       const client = getContentfulManagementClient();
-      const space = await client.getSpace(
-        import.meta.env.VITE_CONTENTFUL_SPACE_ID,
-      );
-      const environment = await space.getEnvironment(
-        import.meta.env.VITE_CONTENTFUL_ENVIRONMENT,
-      );
+      const space = await client.getSpace(spaceId);
+      const environment = await space.getEnvironment(environmentId);
       return environment.getLocales();
     },
     staleTime: QUERY_STALE_TIME,
