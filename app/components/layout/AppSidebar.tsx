@@ -467,25 +467,34 @@ export function AppSidebar({
                   onClick={() => {
                     onNavigate("/locales");
                   }}
-                  className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
+                  className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
                     localeActive
                       ? "bg-sky-500/20 text-sky-700"
                       : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
                   }`}
                 >
-                  <svg
-                    className="w-3.5 h-3.5 shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                    />
-                  </svg>
+                  <div className="relative">
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                      />
+                    </svg>
+                    {locales.items.length > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-sky-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                        {locales.items.length > 99
+                          ? "99+"
+                          : locales.items.length}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[9px] font-semibold leading-none">
                     Locales
                   </span>
@@ -995,6 +1004,13 @@ export function AppSidebar({
                     <span className="text-xs font-semibold text-gray-600 flex-1">
                       Locales
                     </span>
+                    {locales.items.length > 0 && (
+                      <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 bg-sky-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                        {locales.items.length > 99
+                          ? "99+"
+                          : locales.items.length}
+                      </span>
+                    )}
                   </button>
                 </>
               )}
