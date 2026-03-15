@@ -1,4 +1,5 @@
-import { withCache } from "./cache";
+import { queryClient, QUERY_STALE_TIME } from "~/lib/query-client";
+import { queryKeys } from "~/lib/query-keys";
 import { getContentfulManagementEnvironment } from ".";
 
 export type RefGroup = {
@@ -105,57 +106,63 @@ export const getEntryTree = (
   cacheKey: string,
   maxDepth = 15,
 ): Promise<RefGroup[]> =>
-  withCache(cacheKey, async () => {
-    if (rootEntryIds.length === 0) return [];
+  queryClient.ensureQueryData({
+    queryKey: ["entry-tree", cacheKey],
+    queryFn: async () => {
+      if (rootEntryIds.length === 0) return [];
 
-    const env = await getContentfulManagementEnvironment();
+      const env = await getContentfulManagementEnvironment();
 
-    const allContentTypes = await withCache("all-content-types", () =>
-      env.getContentTypes({ limit: 1000 }),
-    );
-    const ctNameById = new Map<string, string>(
-      allContentTypes.items.map((ct: any) => [ct.sys.id, ct.name as string]),
-    );
+      const allContentTypes = await queryClient.ensureQueryData({
+        queryKey: queryKeys.allContentTypes(),
+        queryFn: () => env.getContentTypes({ limit: 1000 }),
+        staleTime: QUERY_STALE_TIME,
+      });
+      const ctNameById = new Map<string, string>(
+        allContentTypes.items.map((ct: any) => [ct.sys.id, ct.name as string]),
+      );
 
-    const excludeSet = new Set(excludeContentTypeIds);
-    const collected = new Map<string, any>(); // entryId → entry
-    const allSeen = new Set<string>(rootEntryIds); // every ID ever queued
+      const excludeSet = new Set(excludeContentTypeIds);
+      const collected = new Map<string, any>(); // entryId → entry
+      const allSeen = new Set<string>(rootEntryIds); // every ID ever queued
 
-    // Seed: fetch root entries (we need them to read their links).
-    // Pass an empty excludeSet so root entries themselves are always fetched.
-    let frontier = await fetchBatch(env, rootEntryIds, collected, new Set());
+      // Seed: fetch root entries (we need them to read their links).
+      // Pass an empty excludeSet so root entries themselves are always fetched.
+      let frontier = await fetchBatch(env, rootEntryIds, collected, new Set());
 
-    // BFS – each iteration follows one level of links
-    for (let depth = 0; depth < maxDepth && frontier.length > 0; depth++) {
-      // Gather all link IDs referenced by entries in the current frontier
-      const nextIds: string[] = [];
-      for (const id of frontier) {
-        const entry = collected.get(id);
-        if (!entry) continue;
-        for (const linkId of extractLinkIds(entry)) {
-          if (!allSeen.has(linkId)) {
-            allSeen.add(linkId);
-            nextIds.push(linkId);
+      // BFS – each iteration follows one level of links
+      for (let depth = 0; depth < maxDepth && frontier.length > 0; depth++) {
+        // Gather all link IDs referenced by entries in the current frontier
+        const nextIds: string[] = [];
+        for (const id of frontier) {
+          const entry = collected.get(id);
+          if (!entry) continue;
+          for (const linkId of extractLinkIds(entry)) {
+            if (!allSeen.has(linkId)) {
+              allSeen.add(linkId);
+              nextIds.push(linkId);
+            }
           }
         }
+        if (nextIds.length === 0) break;
+        frontier = await fetchBatch(env, nextIds, collected, excludeSet);
       }
-      if (nextIds.length === 0) break;
-      frontier = await fetchBatch(env, nextIds, collected, excludeSet);
-    }
 
-    // Group by content type, skipping excluded CTs
-    const groupMap = new Map<string, any[]>();
-    for (const entry of collected.values()) {
-      const ctId: string = entry.sys.contentType.sys.id;
-      if (excludeSet.has(ctId)) continue;
-      if (!groupMap.has(ctId)) groupMap.set(ctId, []);
-      groupMap.get(ctId)!.push(entry);
-    }
+      // Group by content type, skipping excluded CTs
+      const groupMap = new Map<string, any[]>();
+      for (const entry of collected.values()) {
+        const ctId: string = entry.sys.contentType.sys.id;
+        if (excludeSet.has(ctId)) continue;
+        if (!groupMap.has(ctId)) groupMap.set(ctId, []);
+        groupMap.get(ctId)!.push(entry);
+      }
 
-    return [...groupMap.entries()].map(([ctId, items]) => ({
-      contentTypeId: ctId,
-      label: ctNameById.get(ctId) ?? ctId,
-      slug: ctId,
-      items,
-    }));
+      return [...groupMap.entries()].map(([ctId, items]) => ({
+        contentTypeId: ctId,
+        label: ctNameById.get(ctId) ?? ctId,
+        slug: ctId,
+        items,
+      }));
+    },
+    staleTime: QUERY_STALE_TIME,
   });

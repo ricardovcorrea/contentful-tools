@@ -9,6 +9,7 @@ import {
 interface EditModeContextValue {
   editMode: boolean;
   toggleEditMode: () => void;
+  disableEditMode: () => void;
 }
 
 const EditModeContext = createContext<EditModeContextValue | undefined>(
@@ -36,8 +37,19 @@ export function EditModeProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const disableEditMode = useCallback(() => {
+    setEditMode(false);
+    try {
+      localStorage.setItem("editMode", "false");
+    } catch {
+      // ignore
+    }
+  }, []);
+
   return (
-    <EditModeContext.Provider value={{ editMode, toggleEditMode }}>
+    <EditModeContext.Provider
+      value={{ editMode, toggleEditMode, disableEditMode }}
+    >
       {children}
     </EditModeContext.Provider>
   );

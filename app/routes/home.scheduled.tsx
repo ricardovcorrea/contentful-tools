@@ -1,20 +1,33 @@
-import { useRouteLoaderData } from "react-router";
-import { useState, useEffect } from "react";
+import { useRouteLoaderData, useLoaderData } from "react-router";
+import { useState } from "react";
 import type { RefGroup } from "~/lib/contentful/get-entry-tree";
 import { resolveStringField } from "~/lib/resolve-string-field";
-import { getEntry } from "~/lib/contentful/get-entry";
+import { useEntry } from "~/lib/contentful/get-entry";
 import { getContentfulManagementClient } from "~/lib/contentful";
+import {
+  getScheduledActions,
+  type ScheduledAction as ScheduledActionType,
+} from "~/lib/contentful/get-scheduled-actions";
+
+// ── clientLoader — always fetches fresh, bypasses cache entirely ─────────────
+
+export async function clientLoader(): Promise<{
+  scheduledActions: ScheduledActionType[];
+}> {
+  const spaceId = localStorage.getItem("contentfulSpaceId") ?? "";
+  const environmentId = localStorage.getItem("contentfulEnvironment") ?? "";
+  if (!spaceId || !environmentId) return { scheduledActions: [] };
+  try {
+    const scheduledActions = await getScheduledActions(spaceId, environmentId);
+    return { scheduledActions };
+  } catch {
+    return { scheduledActions: [] };
+  }
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ScheduledAction = {
-  id: string;
-  action: "publish" | "unpublish";
-  entityId: string;
-  entityType: string;
-  scheduledAt: string;
-  status: string;
-};
+type ScheduledAction = ScheduledActionType;
 
 type ContextData = {
   opcoId: string;
@@ -52,31 +65,18 @@ function EntryName({
   entryId: string;
   firstLocale: string;
 }) {
-  const [name, setName] = useState<string | null>(null);
+  const { data: entry, isLoading } = useEntry(entryId);
 
-  useEffect(() => {
-    let cancelled = false;
-    getEntry(entryId)
-      .then((entry) => {
-        if (cancelled || !entry) return;
-        const resolved =
-          resolveStringField(entry.fields?.["internalName"], firstLocale) ||
-          resolveStringField(entry.fields?.["title"], firstLocale) ||
-          null;
-        setName(resolved);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [entryId, firstLocale]);
-
-  if (name === null) {
+  if (isLoading) {
     return (
       <span className="inline-block h-3.5 w-40 bg-gray-200 rounded animate-pulse" />
     );
   }
-  return <span>{name}</span>;
+  const name =
+    resolveStringField(entry?.fields?.["internalName"], firstLocale) ||
+    resolveStringField(entry?.fields?.["title"], firstLocale) ||
+    null;
+  return <span>{name ?? entryId}</span>;
 }
 
 // ── Loading skeleton ──────────────────────────────────────────────────────────
@@ -110,6 +110,9 @@ function LoadingSkeleton() {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ScheduledPage() {
+  const loaderData = useLoaderData() as {
+    scheduledActions: ScheduledAction[];
+  } | null;
   const ctx = useRouteLoaderData("routes/home") as ContextData | undefined;
 
   if (!ctx) return <LoadingSkeleton />;
@@ -117,7 +120,6 @@ export default function ScheduledPage() {
   const {
     spaceId,
     environmentId,
-    scheduledActions,
     opcoPages,
     opcoMessages,
     opcoRefGroups,
@@ -129,6 +131,11 @@ export default function ScheduledPage() {
     opcoId,
     partnerId,
   } = ctx;
+
+  // Use fresh loader data for scheduled actions; fall back to parent loader
+  // snapshot only if the child loader hasn't resolved yet.
+  const scheduledActions: ScheduledAction[] =
+    loaderData?.scheduledActions ?? ctx.scheduledActions;
 
   const firstLocale = locales.items[0]?.code ?? "en";
 
@@ -159,6 +166,8 @@ export default function ScheduledPage() {
 
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
   const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<"all" | "publish" | "unpublish">("all");
+  const [search, setSearch] = useState("");
 
   const handleCancel = async (actionId: string) => {
     setCancellingIds((prev) => new Set(prev).add(actionId));
@@ -185,11 +194,24 @@ export default function ScheduledPage() {
   const unpublishCount = sorted.filter((a) => a.action === "unpublish").length;
   const total = sorted.length;
 
+  const q = search.trim().toLowerCase();
+  const visible = sorted.filter((action) => {
+    if (cancelledIds.has(action.id)) return false;
+    if (filter !== "all" && action.action !== filter) return false;
+    if (q) {
+      const matched = entryMap.get(action.entityId);
+      const name = (matched?.name ?? action.entityId).toLowerCase();
+      if (!name.includes(q) && !action.entityId.toLowerCase().includes(q))
+        return false;
+    }
+    return true;
+  });
+
   return (
     <main className="flex-1 overflow-y-auto bg-gray-50">
-      {/* Header */}
-      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 sm:px-8 pt-6 pb-4">
-        <div className="flex items-start justify-between gap-4">
+      {/* Sticky inner header */}
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 sm:px-8 pt-6">
+        <div className="flex items-start justify-between gap-4 pb-4">
           <div className="min-w-0">
             <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
               {opcoId}
@@ -201,7 +223,7 @@ export default function ScheduledPage() {
             <p className="text-sm text-gray-500 mt-1">
               {total === 0
                 ? "No scheduled actions"
-                : `${total} action${total !== 1 ? "s" : ""} scheduled`}
+                : `${visible.length} action${visible.length !== 1 ? "s" : ""} scheduled`}
             </p>
           </div>
           {total > 0 && (
@@ -210,6 +232,53 @@ export default function ScheduledPage() {
             </span>
           )}
         </div>
+
+        {/* Filters + search */}
+        {total > 0 && (
+          <div className="flex items-center gap-2 flex-wrap pb-3">
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[10px] font-semibold">
+              {(["all", "publish", "unpublish"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-2.5 py-1 transition-colors capitalize ${
+                    filter === f
+                      ? "bg-gray-800 text-white"
+                      : "bg-white text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {f === "all"
+                    ? `All (${total})`
+                    : f === "publish"
+                      ? `Publish (${publishCount})`
+                      : `Unpublish (${unpublishCount})`}
+                </button>
+              ))}
+            </div>
+            <div className="relative flex-1 min-w-45 max-w-xs">
+              <svg
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search entries…"
+                className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-sky-400"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="p-6 sm:p-8">
@@ -230,182 +299,168 @@ export default function ScheduledPage() {
             </svg>
             <p className="text-sm font-medium">No scheduled actions</p>
           </div>
+        ) : visible.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
+            <svg
+              className="w-10 h-10"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <p className="text-sm font-medium">No results match your search</p>
+          </div>
         ) : (
-          <div className="flex flex-col gap-6">
-            {/* Summary row */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl bg-white border border-gray-200 px-4 py-3 flex flex-col gap-0.5 shadow-sm">
-                <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
-                  Total
-                </span>
-                <span className="text-2xl font-extrabold text-sky-500 tabular-nums leading-tight">
-                  {total}
-                </span>
-              </div>
-              <div className="rounded-xl bg-white border border-gray-200 px-4 py-3 flex flex-col gap-0.5 shadow-sm">
-                <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
-                  Publish
-                </span>
-                <span className="text-2xl font-extrabold text-emerald-500 tabular-nums leading-tight">
-                  {publishCount}
-                </span>
-              </div>
-              <div className="rounded-xl bg-white border border-gray-200 px-4 py-3 flex flex-col gap-0.5 shadow-sm">
-                <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
-                  Unpublish
-                </span>
-                <span className="text-2xl font-extrabold text-orange-500 tabular-nums leading-tight">
-                  {unpublishCount}
-                </span>
-              </div>
-            </div>
+          <div className="flex flex-col gap-2">
+            {visible.map((action) => {
+              const matched = entryMap.get(action.entityId);
+              const name = matched?.name ?? action.entityId;
+              const scope = matched?.scope;
+              const date = new Date(action.scheduledAt);
+              const dateStr = date.toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              });
+              const timeStr = date.toLocaleTimeString("en-GB", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const url = `https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${action.entityId}`;
+              const isCancelling = cancellingIds.has(action.id);
+              const isCancelled = cancelledIds.has(action.id);
 
-            {/* Entry list */}
-            <div className="flex flex-col gap-2">
-              {sorted.map((action) => {
-                const matched = entryMap.get(action.entityId);
-                const name = matched?.name ?? action.entityId;
-                const scope = matched?.scope;
-                const date = new Date(action.scheduledAt);
-                const dateStr = date.toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                });
-                const timeStr = date.toLocaleTimeString("en-GB", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
-                const url = `https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${action.entityId}`;
-                const isCancelling = cancellingIds.has(action.id);
-                const isCancelled = cancelledIds.has(action.id);
-
-                return (
-                  <div
-                    key={action.id}
-                    className={`flex items-center gap-4 px-5 py-3.5 rounded-xl border transition-colors bg-white ${
-                      isCancelled
-                        ? "border-gray-200 opacity-50"
-                        : action.action === "publish"
-                          ? "border-emerald-100"
-                          : "border-orange-100"
+              return (
+                <div
+                  key={action.id}
+                  className={`flex items-center gap-4 px-5 py-3.5 rounded-xl border transition-colors bg-white ${
+                    isCancelled
+                      ? "border-gray-200 opacity-50"
+                      : action.action === "publish"
+                        ? "border-emerald-100"
+                        : "border-orange-100"
+                  }`}
+                >
+                  {/* Action badge */}
+                  <span
+                    className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      action.action === "publish"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-orange-100 text-orange-700"
                     }`}
                   >
-                    {/* Action badge */}
+                    {action.action === "publish" ? "Publish" : "Unpublish"}
+                  </span>
+
+                  {/* Scope badge */}
+                  {scope && (
                     <span
                       className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        action.action === "publish"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-orange-100 text-orange-700"
+                        scope === "opco"
+                          ? "bg-violet-100 text-violet-700"
+                          : "bg-emerald-100 text-emerald-700"
                       }`}
                     >
-                      {action.action === "publish" ? "Publish" : "Unpublish"}
+                      {scope === "opco" ? "OPCO" : "Partner"}
                     </span>
+                  )}
 
-                    {/* Scope badge */}
-                    {scope && (
-                      <span
-                        className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          scope === "opco"
-                            ? "bg-violet-100 text-violet-700"
-                            : "bg-emerald-100 text-emerald-700"
-                        }`}
-                      >
-                        {scope === "opco" ? "OPCO" : "Partner"}
-                      </span>
-                    )}
-
-                    {/* Entry name + Open in Contentful inline */}
-                    <div className="flex-1 min-w-0">
-                      <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-800 min-w-0">
-                        <span className="truncate">
-                          {matched ? (
-                            name
-                          ) : (
-                            <EntryName
-                              entryId={action.entityId}
-                              firstLocale={firstLocale}
-                            />
-                          )}
-                        </span>
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Open in Contentful"
-                          onClick={(e) => e.stopPropagation()}
-                          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded border border-gray-200 text-[10px] font-medium text-gray-400 hover:text-sky-500 hover:border-sky-300 hover:bg-sky-50 transition-colors"
-                        >
-                          <svg
-                            className="w-2.5 h-2.5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                            />
-                          </svg>
-                          Contentful
-                        </a>
-                      </p>
-                      <p className="text-[10px] font-mono text-gray-400">
-                        {action.entityId}
-                      </p>
-                    </div>
-
-                    {/* Scheduled date/time */}
-                    <div className="shrink-0 text-right">
-                      <p className="text-xs font-semibold text-gray-700 tabular-nums">
-                        {dateStr}
-                      </p>
-                      <p className="text-[10px] text-gray-400 tabular-nums">
-                        {timeStr}
-                      </p>
-                    </div>
-
-                    {/* Cancel button */}
-                    {isCancelled ? (
-                      <span className="shrink-0 text-[10px] font-semibold text-gray-400 px-2.5 py-1 rounded-lg border border-gray-200">
-                        Cancelled
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleCancel(action.id)}
-                        disabled={isCancelling}
-                        className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 text-[10px] font-semibold text-red-500 hover:bg-red-50 hover:border-red-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {isCancelling && (
-                          <svg
-                            className="w-2.5 h-2.5 animate-spin"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8v8H4z"
-                            />
-                          </svg>
+                  {/* Entry name + Open in Contentful inline */}
+                  <div className="flex-1 min-w-0">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-800 min-w-0">
+                      <span className="truncate">
+                        {matched ? (
+                          name
+                        ) : (
+                          <EntryName
+                            entryId={action.entityId}
+                            firstLocale={firstLocale}
+                          />
                         )}
-                        {isCancelling ? "Cancelling…" : "Cancel"}
-                      </button>
-                    )}
+                      </span>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open in Contentful"
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded border border-gray-200 text-[10px] font-medium text-gray-400 hover:text-sky-500 hover:border-sky-300 hover:bg-sky-50 transition-colors"
+                      >
+                        <svg
+                          className="w-2.5 h-2.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                        Contentful
+                      </a>
+                    </p>
+                    <p className="text-[10px] font-mono text-gray-400">
+                      {action.entityId}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Scheduled date/time */}
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs font-semibold text-gray-700 tabular-nums">
+                      {dateStr}
+                    </p>
+                    <p className="text-[10px] text-gray-400 tabular-nums">
+                      {timeStr}
+                    </p>
+                  </div>
+
+                  {/* Cancel button */}
+                  {isCancelled ? (
+                    <span className="shrink-0 text-[10px] font-semibold text-gray-400 px-2.5 py-1 rounded-lg border border-gray-200">
+                      Cancelled
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleCancel(action.id)}
+                      disabled={isCancelling}
+                      className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 text-[10px] font-semibold text-red-500 hover:bg-red-50 hover:border-red-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isCancelling && (
+                        <svg
+                          className="w-2.5 h-2.5 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v8H4z"
+                          />
+                        </svg>
+                      )}
+                      {isCancelling ? "Cancelling…" : "Cancel"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

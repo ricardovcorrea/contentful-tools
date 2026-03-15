@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   getContentfulManagementEntries,
   getContentfulManagementEnvironment,
 } from "~/lib/contentful";
-import { invalidateCacheKey } from "~/lib/contentful/cache";
+import { queryClient } from "~/lib/query-client";
+import { queryKeys } from "~/lib/query-keys";
 import { buildSitemapPages, type SitemapPage } from "~/lib/contentful/sitemap";
 import { POSITIVE_SITEMAP_FIELDS } from "./sitemap/SitemapToggle";
 import { PageRow } from "./sitemap/PageRow";
@@ -41,6 +42,9 @@ export function SitemapSection({
   opcoId,
   partnerId,
   search = "",
+  filterType = "all",
+  onCountsChange,
+  editMode = true,
 }: {
   opcoName: string;
   opcoPages: { items: any[] };
@@ -51,6 +55,9 @@ export function SitemapSection({
   opcoId: string;
   partnerId: string;
   search?: string;
+  filterType?: "all" | "included" | "excluded";
+  onCountsChange?: (included: number, excluded: number) => void;
+  editMode?: boolean;
 }) {
   const [allPages, setAllPages] = useState<SitemapPage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,14 +93,24 @@ export function SitemapSection({
         Object.assign(rawItem.sys, updated.sys);
       }
 
-      // Bust group-level caches so next visit fetches fresh data.
-      invalidateCacheKey(`opco-pages:${opcoId}`);
-      invalidateCacheKey(`opco-messages:${opcoId}`);
-      invalidateCacheKey(`opco-refs:${opcoId}`);
-      invalidateCacheKey(`partner-pages:${opcoId}:${partnerId}`);
-      invalidateCacheKey(`partner-messages:${opcoId}:${partnerId}`);
-      invalidateCacheKey(`partner-emails:${opcoId}:${partnerId}`);
-      invalidateCacheKey(`partner-refs:${opcoId}:${partnerId}`);
+      // Bust group-level query caches so next visit fetches fresh data.
+      queryClient.invalidateQueries({ queryKey: queryKeys.opcoPages(opcoId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.opcoMessages(opcoId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.opcoRefs(opcoId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.partnerPages(opcoId, partnerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.partnerMessages(opcoId, partnerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.partnerEmails(opcoId, partnerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.partnerRefs(opcoId, partnerId),
+      });
     } catch {
       // Revert on failure
       setAllPages((prev) =>
@@ -166,6 +183,25 @@ export function SitemapSection({
   const excludedPages = allPages
     .filter((p) => !p.sitemapIncluded && filterPage(p))
     .sort((a, b) => (a.slug ?? a.name).localeCompare(b.slug ?? b.name));
+
+  // Notify parent of counts whenever they change
+  const prevCounts = useRef({ included: -1, excluded: -1 });
+  useEffect(() => {
+    if (
+      onCountsChange &&
+      (prevCounts.current.included !== includedPages.length ||
+        prevCounts.current.excluded !== excludedPages.length)
+    ) {
+      prevCounts.current = {
+        included: includedPages.length,
+        excluded: excludedPages.length,
+      };
+      onCountsChange(includedPages.length, excludedPages.length);
+    }
+  });
+
+  const showIncluded = filterType === "all" || filterType === "included";
+  const showExcluded = filterType === "all" || filterType === "excluded";
 
   // ── Loading state ── (skeleton rows)
   if (loading) {
@@ -271,7 +307,7 @@ export function SitemapSection({
   return (
     <div className="flex flex-col gap-8">
       {/* ── In sitemap section ── */}
-      {includedPages.length > 0 && (
+      {showIncluded && includedPages.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
@@ -292,6 +328,7 @@ export function SitemapSection({
                   spaceId={spaceId}
                   environmentId={environmentId}
                   pending={pendingIds.has(page.sysId)}
+                  editMode={editMode}
                   onToggle={handleToggle}
                 />
               ))}
@@ -301,7 +338,7 @@ export function SitemapSection({
       )}
 
       {/* ── Excluded section ── */}
-      {excludedPages.length > 0 && (
+      {showExcluded && excludedPages.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
@@ -322,6 +359,7 @@ export function SitemapSection({
                   spaceId={spaceId}
                   environmentId={environmentId}
                   pending={pendingIds.has(page.sysId)}
+                  editMode={editMode}
                   onToggle={handleToggle}
                 />
               ))}

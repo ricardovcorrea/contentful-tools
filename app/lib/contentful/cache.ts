@@ -119,6 +119,14 @@ export function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
 export function clearCache(): void {
   store.clear();
   lsClear();
+  // Also clear the TanStack Query persisted cache from localStorage.
+  try {
+    localStorage.removeItem("rq-cache");
+  } catch {
+    /* ignore */
+  }
+  // Clear the TanStack Query in-memory cache.
+  import("~/lib/query-client").then(({ queryClient }) => queryClient.clear());
   // Leave in-flight requests running — they'll repopulate the fresh store.
 }
 

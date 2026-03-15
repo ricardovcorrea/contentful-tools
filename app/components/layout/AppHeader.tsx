@@ -9,6 +9,7 @@ import { useNavigate } from "react-router";
 import { useToast } from "~/lib/toast";
 import { CreateNewModal } from "~/components/layout/CreateNewModal";
 import { useEditMode } from "~/lib/edit-mode";
+import { queryClient } from "~/lib/query-client";
 
 interface CurrentUser {
   firstName: string;
@@ -241,6 +242,7 @@ export function AppHeader({
               localStorage.removeItem("selectedPartner");
               clearCache();
               clearContentfulManagementClient();
+              queryClient.clear();
               addToast("All data cleared. Signing you out…", "info");
               setTimeout(() => navigate("/login"), 1800);
             }}

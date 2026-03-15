@@ -6,7 +6,7 @@ import { AppHeader } from "~/components/layout/AppHeader";
 import { AppSidebar } from "~/components/layout/AppSidebar";
 import { AppFooter } from "~/components/layout/AppFooter";
 import { ToastProvider } from "~/lib/toast";
-import { EditModeProvider } from "~/lib/edit-mode";
+import { useEditMode } from "~/lib/edit-mode";
 import {
   dispatchLoadStep,
   dispatchLoadComplete,
@@ -21,6 +21,7 @@ import {
   useLocation,
   useRouteError,
   redirect,
+  type ShouldRevalidateFunctionArgs,
 } from "react-router";
 import { getOpcos } from "~/lib/contentful/get-opcos";
 import { getOpcoPartners } from "~/lib/contentful/get-opco-partners";
@@ -33,7 +34,6 @@ import {
   clearContentfulManagementClient,
 } from "~/lib/contentful";
 import {
-  withCache,
   clearCache,
   getCacheLastUpdated,
   CACHE_TTL_MS,
@@ -43,6 +43,8 @@ import { getCurrentUser } from "~/lib/contentful/get-current-user";
 import { getContentType } from "~/lib/contentful/get-content-type";
 import { getScheduledActions } from "~/lib/contentful/get-scheduled-actions";
 import { resolveStringField } from "~/lib/resolve-string-field";
+import { queryClient, QUERY_STALE_TIME } from "~/lib/query-client";
+import { queryKeys } from "~/lib/query-keys";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -53,6 +55,26 @@ export function meta({}: Route.MetaArgs) {
         "Browse and manage Contentful entries, translations, and partner content across locales.",
     },
   ];
+}
+
+/**
+ * Re-run the loader when the opco or partner selection changes (URL params),
+ * so child routes always receive correctly scoped loader data.
+ * For all other navigations (e.g. moving between sub-pages) skip the reload
+ * since TanStack Query manages data freshness there.
+ */
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+}: ShouldRevalidateFunctionArgs) {
+  if (
+    currentUrl.searchParams.get("opco") !== nextUrl.searchParams.get("opco") ||
+    currentUrl.searchParams.get("partner") !==
+      nextUrl.searchParams.get("partner")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -89,10 +111,20 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         getOpcos(),
         getLocales(),
         getCurrentUser(),
-        withCache(`space:${spaceId}`, () => client.getSpace(spaceId)),
-        withCache(`spaces`, () => client.getSpaces()).catch(() => ({
-          items: [],
-        })),
+        queryClient.ensureQueryData({
+          queryKey: queryKeys.space(spaceId),
+          queryFn: () => client.getSpace(spaceId),
+          staleTime: Infinity,
+        }),
+        queryClient
+          .ensureQueryData({
+            queryKey: queryKeys.spaces(),
+            queryFn: () => client.getSpaces(),
+            staleTime: Infinity,
+          })
+          .catch(() => ({
+            items: [],
+          })),
       ]);
   } catch (e: any) {
     const status = e?.sys?.status ?? e?.status ?? e?.response?.status;
@@ -203,10 +235,16 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   dispatchLoadStep(1);
   try {
     [envObj, environmentsList, opcoPartners] = await Promise.all([
-      withCache(`env:${spaceId}:${environment}`, () =>
-        spaceObj.getEnvironment(environment),
-      ),
-      withCache(`environments:${spaceId}`, () => spaceObj.getEnvironments()),
+      queryClient.ensureQueryData({
+        queryKey: queryKeys.envObj(spaceId, environment),
+        queryFn: () => spaceObj.getEnvironment(environment),
+        staleTime: Infinity,
+      }),
+      queryClient.ensureQueryData({
+        queryKey: queryKeys.environments(spaceId),
+        queryFn: () => spaceObj.getEnvironments(),
+        staleTime: Infinity,
+      }),
       getOpcoPartners(opcoId),
     ]);
   } catch (e: any) {
@@ -221,21 +259,36 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   // Fire env-level stats + scheduled actions in the background immediately —
   // they'll almost certainly finish before the tree-building steps do.
-  const scheduledActionsPromise = withCache(
-    `scheduled-actions:${spaceId}:${environment}`,
-    () => getScheduledActions(spaceId!, environment!),
-  ).catch(() => []);
+  const scheduledActionsPromise = queryClient
+    .ensureQueryData({
+      queryKey: queryKeys.scheduledActions(spaceId, environment),
+      queryFn: () => getScheduledActions(spaceId!, environment!),
+      staleTime: QUERY_STALE_TIME,
+    })
+    .catch(() => []);
 
   const envStatsPromise = Promise.all([
-    withCache(`env-entries-total:${spaceId}:${environment}`, () =>
-      envObj.getEntries({ limit: 0 }),
-    ).catch(() => ({ total: null })),
-    withCache(`env-ct-total:${spaceId}:${environment}`, () =>
-      envObj.getContentTypes({ limit: 0 }),
-    ).catch(() => ({ total: null })),
-    withCache(`env-assets-total:${spaceId}:${environment}`, () =>
-      envObj.getAssets({ limit: 0 }),
-    ).catch(() => ({ total: null })),
+    queryClient
+      .ensureQueryData({
+        queryKey: queryKeys.envEntriesTotal(spaceId, environment),
+        queryFn: () => envObj.getEntries({ limit: 0 }),
+        staleTime: QUERY_STALE_TIME,
+      })
+      .catch(() => ({ total: null })),
+    queryClient
+      .ensureQueryData({
+        queryKey: queryKeys.envContentTypesTotal(spaceId, environment),
+        queryFn: () => envObj.getContentTypes({ limit: 0 }),
+        staleTime: QUERY_STALE_TIME,
+      })
+      .catch(() => ({ total: null })),
+    queryClient
+      .ensureQueryData({
+        queryKey: queryKeys.envAssetsTotal(spaceId, environment),
+        queryFn: () => envObj.getAssets({ limit: 0 }),
+        staleTime: QUERY_STALE_TIME,
+      })
+      .catch(() => ({ total: null })),
   ]);
 
   const firstPartnerId = resolveStringField(
@@ -379,6 +432,35 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   dispatchLoadComplete();
   await new Promise((r) => setTimeout(r, 3000));
 
+  // Seed TanStack Query cache so useEntry/useAsset hooks across all pages get
+  // instant results without extra API calls for data we just loaded.
+  // All entry keys include [opcoId, partnerId] so hooks always resolve via the
+  // same scoped key regardless of whether the entry is opco- or partner-specific.
+  for (const collection of [
+    opcoPages,
+    opcoMessages,
+    partnerPages,
+    partnerMessages,
+    partnerEmails,
+  ]) {
+    for (const item of collection.items ?? []) {
+      queryClient.setQueryData(
+        queryKeys.entry(item.sys.id, opcoId, partnerId),
+        item,
+      );
+    }
+  }
+  for (const group of [...opcoRefGroups, ...partnerRefGroups]) {
+    for (const item of group.items ?? []) {
+      queryClient.setQueryData(
+        queryKeys.entry(item.sys.id, opcoId, partnerId),
+        item,
+      );
+    }
+  }
+  // Stamp load time so getCacheLastUpdated() continues to work for the UI.
+  localStorage.setItem("cf_cache_updated_at", String(Date.now()));
+
   return {
     opcos,
     opcoId,
@@ -442,6 +524,7 @@ export function ErrorBoundary() {
     localStorage.removeItem("selectedPartner");
     clearCache();
     clearContentfulManagementClient();
+    queryClient.clear();
   }, [isAuthError]);
 
   return (
@@ -626,15 +709,29 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const [searchParams] = useSearchParams();
   const { entryId } = useParams();
   const isLoading = navigation.state === "loading";
-  const selectedOpco = searchParams.get("opco") ?? opcoId;
-  const selectedPartner = searchParams.get("partner") ?? partnerId;
+  // Use localStorage as the authoritative fallback — it is always written
+  // by handleOpcoChange/handlePartnerChange, whereas opcoId/partnerId are
+  // frozen loader snapshots that don't update when shouldRevalidate=false.
+  const selectedOpco =
+    searchParams.get("opco") ?? localStorage.getItem("selectedOpco") ?? opcoId;
+  const selectedPartner =
+    searchParams.get("partner") ??
+    localStorage.getItem("selectedPartner") ??
+    partnerId;
   const { pathname } = useLocation();
 
   const opcoEntrySysId = opcos.items.find(
     (o: any) =>
       resolveStringField(o.fields["id"], firstLocale) === selectedOpco,
   )?.sys.id;
-  const partnerEntrySysId = opcoPartners.items.find(
+  // Partners for the currently selected OPCO.
+  // Initialised from loader data and eagerly updated by handleOpcoChange;
+  // also synced whenever the loader re-runs (e.g. after an opco/partner switch).
+  const [activePartners, setActivePartners] = useState(opcoPartners);
+  useEffect(() => {
+    setActivePartners(opcoPartners);
+  }, [opcoPartners]);
+  const partnerEntrySysId = activePartners.items.find(
     (p: any) =>
       resolveStringField(p.fields["id"], firstLocale) === selectedPartner,
   )?.sys.id;
@@ -665,6 +762,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const [sidebarResetKey, setSidebarResetKey] = useState(0);
   const [showFullLoading, setShowFullLoading] = useState(false);
   const [isInactive, setIsInactive] = useState(false);
+  const { disableEditMode } = useEditMode();
 
   useEffect(() => {
     if (shouldExpandOpco) setOpcoExpanded(true);
@@ -721,6 +819,9 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
       localStorage.removeItem("contentfulEnvironment");
       localStorage.removeItem("selectedOpco");
       localStorage.removeItem("selectedPartner");
+      clearCache();
+      clearContentfulManagementClient();
+      queryClient.clear();
       navigateRef.current("/login", { replace: true });
     };
 
@@ -776,16 +877,55 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
       ? `${rawToken.slice(0, 6)}${"·".repeat(Math.min(rawToken.length - 12, 24))}${rawToken.slice(-6)}`
       : rawToken;
 
-  const handleOpcoChange = (id: string) => {
+  const handleOpcoChange = async (id: string) => {
+    const prevOpcoId = localStorage.getItem("selectedOpco") ?? opcoId;
+    const prevPartnerId = localStorage.getItem("selectedPartner") ?? partnerId;
     localStorage.setItem("selectedOpco", id);
     localStorage.removeItem("selectedPartner");
     setOpcoExpanded(false);
     setPartnerExpanded(false);
     setSidebarResetKey((k) => k + 1);
     setShowFullLoading(true);
+    disableEditMode();
+    // Invalidate all queries scoped to the previous OPCO/partner so stale
+    // data from the old context cannot bleed into the new one.
+    queryClient.invalidateQueries({ queryKey: ["opco-pages", prevOpcoId] });
+    queryClient.invalidateQueries({ queryKey: ["opco-messages", prevOpcoId] });
+    queryClient.invalidateQueries({ queryKey: ["opco-refs", prevOpcoId] });
+    queryClient.invalidateQueries({
+      queryKey: ["partner-pages", prevOpcoId, prevPartnerId],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["partner-messages", prevOpcoId, prevPartnerId],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["partner-emails", prevOpcoId, prevPartnerId],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["partner-refs", prevOpcoId, prevPartnerId],
+    });
+    queryClient.invalidateQueries({ queryKey: ["opco-partners", prevOpcoId] });
+    // Invalidate individual entries that were seeded from old-OPCO collections.
+    queryClient.invalidateQueries({ queryKey: queryKeys.entries() });
+    // Eagerly load partners for the new OPCO from cache (or fetch if missing).
+    let newPartners = opcoPartners;
+    try {
+      newPartners = await getOpcoPartners(id);
+    } catch {
+      /* fall back to existing list */
+    }
+    setActivePartners(newPartners);
+    // Auto-select the first available partner for the new OPCO.
+    const firstPartnerId =
+      resolveStringField(newPartners.items[0]?.fields["id"], firstLocale) ??
+      newPartners.items[0]?.sys.id;
+    if (firstPartnerId) {
+      localStorage.setItem("selectedPartner", firstPartnerId);
+    }
     const params = new URLSearchParams(searchParams);
     params.set("opco", id);
-    params.delete("partner");
+    if (firstPartnerId) params.set("partner", firstPartnerId);
+    else params.delete("partner");
     navigate(`/environment?${params.toString()}`);
   };
 
@@ -794,6 +934,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     setPartnerExpanded(false);
     setSidebarResetKey((k) => k + 1);
     setShowFullLoading(true);
+    disableEditMode();
     const params = new URLSearchParams(searchParams);
     params.set("partner", id);
     navigate(`/environment?${params.toString()}`);
@@ -813,6 +954,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     localStorage.removeItem("selectedPartner");
     clearCache();
     clearContentfulManagementClient();
+    queryClient.clear();
     navigate("/login");
   };
 
@@ -827,174 +969,172 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <EditModeProvider>
-      <ToastProvider>
-        {showFullLoading && (
-          <div className="fixed inset-0 z-9999">
-            <LoadingScreen />
-          </div>
-        )}
-        <div className="min-h-screen bg-gray-200 p-4">
-          <div className="h-[calc(100vh-2rem)] max-w-480 mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
-            <AppHeader
-              spaceName={spaceName}
-              spaceId={spaceId}
-              spaceOptions={spaces.map((s) => ({ value: s.id, label: s.name }))}
-              onSpaceChange={handleSpaceChange}
-              environmentId={environmentId}
-              environments={environments}
-              currentUser={currentUser}
-              isLoading={isLoading}
-              onEnvChange={handleEnvChange}
-              opcoOptions={opcos.items.map((opco: any) => ({
-                value:
-                  resolveStringField(opco.fields["id"], firstLocale) ||
-                  opco.sys.id,
-                label: (resolveStringField(
-                  opco.fields["internalName"],
-                  firstLocale,
-                ) ||
-                  resolveStringField(opco.fields["title"], firstLocale) ||
-                  resolveStringField(opco.fields["id"], firstLocale) ||
-                  opco.sys.id) as string,
-                imageAssetId: (
-                  opco.fields["logo"]?.[firstLocale] ??
-                  (Object.values(opco.fields["logo"] ?? {}) as any[])[0]
-                )?.sys?.id as string | undefined,
-              }))}
-              selectedOpco={selectedOpco}
-              onOpcoChange={handleOpcoChange}
-              partnerOptions={opcoPartners.items.map((partner: any) => ({
-                value:
-                  resolveStringField(partner.fields["id"], firstLocale) ||
-                  partner.sys.id,
-                label: (resolveStringField(
-                  partner.fields["internalName"],
-                  firstLocale,
-                ) ||
-                  resolveStringField(partner.fields["title"], firstLocale) ||
-                  resolveStringField(partner.fields["id"], firstLocale) ||
-                  partner.sys.id) as string,
-                imageAssetId: (
-                  partner.fields["logo"]?.[firstLocale] ??
-                  (Object.values(partner.fields["logo"] ?? {}) as any[])[0]
-                )?.sys?.id as string | undefined,
-              }))}
-              selectedPartner={selectedPartner}
-              onPartnerChange={handlePartnerChange}
-              firstLocale={firstLocale}
-              opcos={opcos}
-              allPartners={opcoPartners}
-            />
-
-            {/* Top progress bar */}
-            {isLoading && (
-              <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
-                <div
-                  className="h-full w-1/2 bg-blue-500"
-                  style={{
-                    animation: "progress-slide 1.4s ease-in-out infinite",
-                  }}
-                />
-              </div>
-            )}
-
-            <div className="flex flex-1 overflow-hidden">
-              <AppSidebar
-                isLoading={isLoading}
-                firstLocale={firstLocale}
-                locales={allLocales}
-                opcos={opcos}
-                selectedOpco={selectedOpco}
-                opcoEntrySysId={opcoEntrySysId}
-                opcoPages={opcoPages}
-                opcoMessages={opcoMessages}
-                opcoRefGroups={opcoRefGroups}
-                opcoHasLocalizable={opcoHasLocalizable}
-                opcoHasMissingTranslations={opcoHasMissingTranslations}
-                opcoExpanded={opcoExpanded}
-                onOpcoToggle={() => setOpcoExpanded((p) => !p)}
-                opcoPartners={opcoPartners}
-                selectedPartner={selectedPartner}
-                partnerEntrySysId={partnerEntrySysId}
-                partnerPages={partnerPages}
-                partnerMessages={partnerMessages}
-                partnerEmails={partnerEmails}
-                partnerRefGroups={partnerRefGroups}
-                partnerHasLocalizable={partnerHasLocalizable}
-                partnerHasMissingTranslations={partnerHasMissingTranslations}
-                partnerExpanded={partnerExpanded}
-                onPartnerToggle={() => setPartnerExpanded((p) => !p)}
-                entryId={entryId}
-                pathname={pathname}
-                onNavigate={handleNavigate}
-                onGoToEntry={goToEntry}
-                isLocalizable={isLocalizable}
-                resetKey={sidebarResetKey}
-                groupMissingMap={groupMissingMap}
-              />
-
-              {/* Main content */}
-              {isLoading ? (
-                <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
-                  <div
-                    style={{
-                      animation: "skeleton-shimmer 1.4s ease-in-out infinite",
-                    }}
-                  >
-                    <div className="mb-6">
-                      <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
-                      <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
-                      <div className="h-3 w-40 bg-gray-200 rounded" />
-                    </div>
-                    <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
-                      {[82, 76, 48, 52].map((w, i) => (
-                        <div
-                          key={i}
-                          className="h-4 bg-gray-200 rounded"
-                          style={{ width: w }}
-                        />
-                      ))}
-                    </div>
-                    <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
-                      <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
-                        <div className="h-3 w-24 bg-gray-300 rounded" />
-                        <div className="h-3 w-32 bg-gray-300 rounded" />
-                      </div>
-                      {Array.from({ length: 9 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
-                        >
-                          <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
-                          <div
-                            className="h-3 bg-gray-200 rounded"
-                            style={{ width: `${40 + ((i * 23) % 45)}%` }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </main>
-              ) : (
-                <Outlet />
-              )}
-            </div>
-
-            <AppFooter
-              maskedToken={maskedToken}
-              cacheLastUpdated={cacheLastUpdated}
-              isLoading={isLoading}
-              onRefreshCache={() => {
-                clearCache();
-                navigate(0);
-              }}
-              cacheTtlMs={CACHE_TTL_MS}
-              isInactive={isInactive}
-            />
-          </div>
+    <ToastProvider>
+      {showFullLoading && (
+        <div className="fixed inset-0 z-9999">
+          <LoadingScreen />
         </div>
-      </ToastProvider>
-    </EditModeProvider>
+      )}
+      <div className="min-h-screen bg-gray-200 p-4">
+        <div className="h-[calc(100vh-2rem)] max-w-480 mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
+          <AppHeader
+            spaceName={spaceName}
+            spaceId={spaceId}
+            spaceOptions={spaces.map((s) => ({ value: s.id, label: s.name }))}
+            onSpaceChange={handleSpaceChange}
+            environmentId={environmentId}
+            environments={environments}
+            currentUser={currentUser}
+            isLoading={isLoading}
+            onEnvChange={handleEnvChange}
+            opcoOptions={opcos.items.map((opco: any) => ({
+              value:
+                resolveStringField(opco.fields["id"], firstLocale) ||
+                opco.sys.id,
+              label: (resolveStringField(
+                opco.fields["internalName"],
+                firstLocale,
+              ) ||
+                resolveStringField(opco.fields["title"], firstLocale) ||
+                resolveStringField(opco.fields["id"], firstLocale) ||
+                opco.sys.id) as string,
+              imageAssetId: (
+                opco.fields["logo"]?.[firstLocale] ??
+                (Object.values(opco.fields["logo"] ?? {}) as any[])[0]
+              )?.sys?.id as string | undefined,
+            }))}
+            selectedOpco={selectedOpco}
+            onOpcoChange={handleOpcoChange}
+            partnerOptions={activePartners.items.map((partner: any) => ({
+              value:
+                resolveStringField(partner.fields["id"], firstLocale) ||
+                partner.sys.id,
+              label: (resolveStringField(
+                partner.fields["internalName"],
+                firstLocale,
+              ) ||
+                resolveStringField(partner.fields["title"], firstLocale) ||
+                resolveStringField(partner.fields["id"], firstLocale) ||
+                partner.sys.id) as string,
+              imageAssetId: (
+                partner.fields["logo"]?.[firstLocale] ??
+                (Object.values(partner.fields["logo"] ?? {}) as any[])[0]
+              )?.sys?.id as string | undefined,
+            }))}
+            selectedPartner={selectedPartner}
+            onPartnerChange={handlePartnerChange}
+            firstLocale={firstLocale}
+            opcos={opcos}
+            allPartners={activePartners}
+          />
+
+          {/* Top progress bar */}
+          {isLoading && (
+            <div className="h-0.5 bg-gray-200 overflow-hidden shrink-0">
+              <div
+                className="h-full w-1/2 bg-blue-500"
+                style={{
+                  animation: "progress-slide 1.4s ease-in-out infinite",
+                }}
+              />
+            </div>
+          )}
+
+          <div className="flex flex-1 overflow-hidden">
+            <AppSidebar
+              isLoading={isLoading}
+              firstLocale={firstLocale}
+              locales={allLocales}
+              opcos={opcos}
+              selectedOpco={selectedOpco}
+              opcoEntrySysId={opcoEntrySysId}
+              opcoPages={opcoPages}
+              opcoMessages={opcoMessages}
+              opcoRefGroups={opcoRefGroups}
+              opcoHasLocalizable={opcoHasLocalizable}
+              opcoHasMissingTranslations={opcoHasMissingTranslations}
+              opcoExpanded={opcoExpanded}
+              onOpcoToggle={() => setOpcoExpanded((p) => !p)}
+              opcoPartners={activePartners}
+              selectedPartner={selectedPartner}
+              partnerEntrySysId={partnerEntrySysId}
+              partnerPages={partnerPages}
+              partnerMessages={partnerMessages}
+              partnerEmails={partnerEmails}
+              partnerRefGroups={partnerRefGroups}
+              partnerHasLocalizable={partnerHasLocalizable}
+              partnerHasMissingTranslations={partnerHasMissingTranslations}
+              partnerExpanded={partnerExpanded}
+              onPartnerToggle={() => setPartnerExpanded((p) => !p)}
+              entryId={entryId}
+              pathname={pathname}
+              onNavigate={handleNavigate}
+              onGoToEntry={goToEntry}
+              isLocalizable={isLocalizable}
+              resetKey={sidebarResetKey}
+              groupMissingMap={groupMissingMap}
+            />
+
+            {/* Main content */}
+            {isLoading ? (
+              <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-gray-50">
+                <div
+                  style={{
+                    animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                  }}
+                >
+                  <div className="mb-6">
+                    <div className="h-5 w-20 bg-gray-200 rounded-full mb-3" />
+                    <div className="h-6 w-64 bg-gray-200 rounded mb-2" />
+                    <div className="h-3 w-40 bg-gray-200 rounded" />
+                  </div>
+                  <div className="flex gap-2 border-b border-gray-200 pb-2 mb-0">
+                    {[82, 76, 48, 52].map((w, i) => (
+                      <div
+                        key={i}
+                        className="h-4 bg-gray-200 rounded"
+                        style={{ width: w }}
+                      />
+                    ))}
+                  </div>
+                  <div className="bg-gray-100 border border-gray-300 rounded-xl overflow-hidden">
+                    <div className="flex gap-8 px-4 py-2.5 bg-gray-200 border-b border-gray-300">
+                      <div className="h-3 w-24 bg-gray-300 rounded" />
+                      <div className="h-3 w-32 bg-gray-300 rounded" />
+                    </div>
+                    {Array.from({ length: 9 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`flex gap-8 px-4 py-3 ${i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"}`}
+                      >
+                        <div className="h-3 w-28 bg-gray-200 rounded shrink-0" />
+                        <div
+                          className="h-3 bg-gray-200 rounded"
+                          style={{ width: `${40 + ((i * 23) % 45)}%` }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </main>
+            ) : (
+              <Outlet />
+            )}
+          </div>
+
+          <AppFooter
+            maskedToken={maskedToken}
+            cacheLastUpdated={cacheLastUpdated}
+            isLoading={isLoading}
+            onRefreshCache={() => {
+              clearCache();
+              navigate(0);
+            }}
+            cacheTtlMs={CACHE_TTL_MS}
+            isInactive={isInactive}
+          />
+        </div>
+      </div>
+    </ToastProvider>
   );
 }

@@ -189,14 +189,13 @@ export function AppSidebar({
     pathname === "/scheduled" ||
     pathname.startsWith("/locales");
   const [envExpanded, setEnvExpanded] = useState<boolean>(true);
-  const [localesExpanded, setLocalesExpanded] = useState<boolean>(false);
   const [translationsExpanded, setTranslationsExpanded] =
     useState<boolean>(false);
   const [contentExpanded, setContentExpanded] = useState<boolean>(false);
   const [accordionExpandKey, setAccordionExpandKey] = useState(0);
   const [accordionCollapseKey, setAccordionCollapseKey] = useState(0);
 
-  const localeActive = pathname.startsWith("/locales/");
+  const localeActive = pathname.startsWith("/locales");
 
   // An entry belongs to the OPCO section when it's within OPCO data and not on an overview route.
   const isInOpcoSection =
@@ -240,10 +239,6 @@ export function AppSidebar({
       firstLocale,
     ) ?? selectedPartner;
 
-  useEffect(() => {
-    if (localeActive) setLocalesExpanded(true);
-  }, [localeActive]);
-
   // Auto-expand env section when navigating to an env child page.
   useEffect(() => {
     if (envShouldBeOpen) {
@@ -278,7 +273,6 @@ export function AppSidebar({
   // Collapse non-env sections when OPCO/Partner changes.
   useEffect(() => {
     if (!resetKey) return;
-    setLocalesExpanded(false);
     setTranslationsExpanded(false);
     setContentExpanded(false);
     setEnvExpanded(true);
@@ -287,7 +281,7 @@ export function AppSidebar({
   return (
     <aside
       className={`relative shrink-0 bg-gray-100 border-r border-gray-200/60 flex flex-col overflow-hidden transition-[width] duration-200 ${
-        collapsed ? "w-24" : "w-72"
+        collapsed ? "w-24" : "w-[318px]"
       } ${isLoading ? "opacity-50 pointer-events-none" : "opacity-100"}`}
     >
       {collapsed ? (
@@ -401,8 +395,8 @@ export function AppSidebar({
                   onClick={() => onNavigate("/unpublished")}
                   className={`relative w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
                     pathname === "/unpublished"
-                      ? "bg-amber-500/20 text-amber-700"
-                      : "text-gray-500 hover:bg-amber-500/10 hover:text-amber-600"
+                      ? "bg-sky-500/20 text-sky-700"
+                      : "text-gray-500 hover:bg-sky-500/10 hover:text-sky-600"
                   }`}
                 >
                   <svg
@@ -450,8 +444,7 @@ export function AppSidebar({
                 <button
                   onClick={() => {
                     setCollapsed(false);
-                    setEnvExpanded(true);
-                    setLocalesExpanded(true);
+                    onNavigate("/locales");
                   }}
                   className={`w-full flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md transition-colors ${
                     localeActive
@@ -645,7 +638,6 @@ export function AppSidebar({
               <button
                 onClick={() => {
                   setEnvExpanded(false);
-                  setLocalesExpanded(false);
                   setTranslationsExpanded(false);
                   setContentExpanded(false);
                   if (opcoExpanded) onOpcoToggle();
@@ -672,7 +664,6 @@ export function AppSidebar({
               <button
                 onClick={() => {
                   setEnvExpanded(true);
-                  setLocalesExpanded(true);
                   setTranslationsExpanded(true);
                   setContentExpanded(true);
                   if (!opcoExpanded) onOpcoToggle();
@@ -892,13 +883,13 @@ export function AppSidebar({
                     onClick={() => onNavigate("/unpublished")}
                     className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
                       pathname === "/unpublished"
-                        ? "border-amber-500 bg-amber-500/10 text-amber-700"
+                        ? "border-sky-500 bg-sky-500/10 text-sky-700"
                         : "border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                     }`}
                   >
-                    <div className="w-5 h-5 rounded-md border border-amber-400/20 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
                       <svg
-                        className="w-3 h-3 text-amber-500"
+                        className="w-3 h-3 text-sky-500"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -946,7 +937,7 @@ export function AppSidebar({
                   </button>
 
                   <button
-                    onClick={() => setLocalesExpanded((p) => !p)}
+                    onClick={() => onNavigate("/locales")}
                     className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 border-l-2 transition-colors ${
                       localeActive
                         ? "border-sky-500 bg-sky-500/10 text-sky-700"
@@ -971,60 +962,7 @@ export function AppSidebar({
                     <span className="text-xs font-semibold text-gray-600 flex-1">
                       Locales
                     </span>
-                    <span className="text-[11px] text-sky-500 tabular-nums font-semibold bg-sky-500/10 border border-sky-300/30 px-1.5 py-0.5 rounded-full shrink-0">
-                      {locales.items.length}
-                    </span>
-                    <svg
-                      className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-200 ${localesExpanded ? "" : "-rotate-90"}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
                   </button>
-
-                  {localesExpanded && (
-                    <ul className="flex flex-col">
-                      {locales.items.map((locale) => {
-                        const localePath = `/locales/${locale.code}`;
-                        const active = pathname === localePath;
-                        return (
-                          <li key={locale.code}>
-                            <button
-                              onClick={() => onNavigate(localePath)}
-                              className={`w-full text-left flex items-center gap-2 pl-5 pr-2.5 py-1.5 border-l-2 transition-colors ${
-                                active
-                                  ? "border-sky-500 bg-sky-500/10"
-                                  : "border-transparent hover:bg-gray-100"
-                              }`}
-                            >
-                              <div className="w-5 h-5 rounded-md border border-sky-400/20 flex items-center justify-center shrink-0">
-                                <span className="text-[9px] font-bold text-sky-500 uppercase tracking-tight truncate px-0.5">
-                                  {locale.code.split("-")[0]}
-                                </span>
-                              </div>
-                              <span
-                                className={`text-xs font-semibold truncate flex-1 ${active ? "text-sky-700" : "text-gray-600"}`}
-                              >
-                                {locale.name}
-                              </span>
-                              {locale.default && (
-                                <span className="text-[9px] font-bold uppercase tracking-wide bg-sky-500/10 text-sky-600 border border-sky-300/40 px-1 py-0 rounded shrink-0">
-                                  default
-                                </span>
-                              )}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
                 </>
               )}
             </div>

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouteLoaderData } from "react-router";
 import { getContentType } from "~/lib/contentful/get-content-type";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
-import { invalidateEntry } from "~/lib/contentful/get-entry";
+import { queryKeys } from "~/lib/query-keys";
 import { CellValue } from "~/components/overview/CellValue";
 import type { EntryGroup } from "~/types/contentful";
 import { resolveStringField } from "~/lib/resolve-string-field";
@@ -79,6 +81,12 @@ export function GroupTable({
 
   const { addToast } = useToast();
   const { editMode } = useEditMode();
+  const queryClientInstance = useQueryClient();
+  const _homeData = useRouteLoaderData("routes/home") as
+    | { opcoId?: string; partnerId?: string }
+    | undefined;
+  const _opcoId = _homeData?.opcoId ?? "";
+  const _partnerId = _homeData?.partnerId ?? "";
 
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [editingCell, setEditingCell] = useState<string | null>(null);
@@ -111,15 +119,21 @@ export function GroupTable({
         cfEntry.fields[fieldId] ??= {};
         cfEntry.fields[fieldId][lc] = value;
         await cfEntry.update();
-        // Mutate the cached list item in-place so the value persists across
-        // re-renders and future reads without needing a full data reload.
-        const cachedItem = group.items.find((i: any) => i.sys.id === entryId);
-        if (cachedItem) {
-          cachedItem.fields[fieldId] ??= {};
-          cachedItem.fields[fieldId][lc] = value;
-        }
-        // Invalidate the per-entry cache so getEntry() callers also get fresh data.
-        invalidateEntry(entryId);
+        // Write the updated value into the TanStack Query cache so all
+        // subscribers (useEntry hooks) see fresh data immediately.
+        queryClientInstance.setQueryData(
+          queryKeys.entry(entryId, _opcoId, _partnerId),
+          (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              fields: {
+                ...old.fields,
+                [fieldId]: { ...(old.fields[fieldId] ?? {}), [lc]: value },
+              },
+            };
+          },
+        );
         setLocalEdits((prev) => ({ ...prev, [ck]: value }));
         setEditingCell(null);
         setEditingValue("");
@@ -133,7 +147,7 @@ export function GroupTable({
         setSavingCell(null);
       }
     },
-    [group.items],
+    [queryClientInstance, addToast, _opcoId, _partnerId],
   );
 
   const getName = (fields: Record<string, any>) => {

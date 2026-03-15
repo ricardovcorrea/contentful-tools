@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
 import { useRouteLoaderData } from "react-router";
-import { getAsset } from "~/lib/contentful/get-asset";
-import { getEntry } from "~/lib/contentful/get-entry";
+import { useAsset } from "~/lib/contentful/get-asset";
+import { useEntry } from "~/lib/contentful/get-entry";
 import { isRichText } from "~/lib/rich-text";
 import { RichTextRenderer } from "~/components/RichTextRenderer";
 
@@ -19,28 +18,10 @@ export function AssetCell({
   assetId: string;
   firstLocale: string;
 }) {
-  const [asset, setAsset] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: asset, isLoading } = useAsset(assetId);
   const _pd = useRouteLoaderData("routes/home") as any;
   const _spaceId: string = _pd?.spaceId ?? "";
   const _envId: string = _pd?.environmentId ?? "";
-
-  useEffect(() => {
-    let cancelled = false;
-    getAsset(assetId)
-      .then((a) => {
-        if (!cancelled) {
-          setAsset(a);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assetId]);
 
   const fields = asset?.fields ?? {};
   const title =
@@ -54,7 +35,7 @@ export function AssetCell({
   const contentType: string = fileObj?.contentType ?? "";
   const isImage = contentType.startsWith("image/");
 
-  if (loading) {
+  if (isLoading) {
     return (
       <span
         className="inline-block h-4 w-20 bg-gray-200 rounded"
@@ -121,45 +102,30 @@ function EntryImageCell({
   entryId: string;
   firstLocale: string;
 }) {
-  const [assetId, setAssetId] = useState<string | null>(null);
-  const [checked, setChecked] = useState(false);
+  const { data: entry, isLoading } = useEntry(entryId);
 
-  useEffect(() => {
-    let cancelled = false;
-    getEntry(entryId)
-      .then((entry) => {
-        if (cancelled) return;
-        const fields = entry?.fields ?? {};
-        let found: string | null = null;
-        outer: for (const localeMap of Object.values(fields)) {
-          const val =
-            (localeMap as any)?.[firstLocale] ??
-            Object.values((localeMap as any) ?? {})[0];
-          if (val?.sys?.linkType === "Asset" && val?.sys?.id) {
-            found = val.sys.id;
-            break outer;
-          }
-          if (Array.isArray(val)) {
-            for (const v of val) {
-              if (v?.sys?.linkType === "Asset" && v?.sys?.id) {
-                found = v.sys.id;
-                break outer;
-              }
-            }
-          }
+  const assetId = (() => {
+    if (!entry) return null;
+    const fields = entry?.fields ?? {};
+    for (const localeMap of Object.values(fields)) {
+      const val =
+        (localeMap as any)?.[firstLocale] ??
+        Object.values((localeMap as any) ?? {})[0];
+      if (val?.sys?.linkType === "Asset" && val?.sys?.id)
+        return val.sys.id as string;
+      if (Array.isArray(val)) {
+        for (const v of val) {
+          if (v?.sys?.linkType === "Asset" && v?.sys?.id)
+            return v.sys.id as string;
         }
-        setAssetId(found);
-        setChecked(true);
-      })
-      .catch(() => setChecked(true));
-    return () => {
-      cancelled = true;
-    };
-  }, [entryId, firstLocale]);
+      }
+    }
+    return null;
+  })();
 
   return (
     <div className="flex flex-col gap-1">
-      {!checked && (
+      {isLoading && (
         <span
           className="inline-block h-4 w-20 bg-gray-200 rounded"
           style={{ animation: "skeleton-shimmer 1.4s ease-in-out infinite" }}

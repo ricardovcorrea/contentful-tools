@@ -41,31 +41,43 @@ export function SitemapToggle({
   included,
   pending,
   fieldName,
+  editMode = true,
   onChange,
 }: {
   included: boolean;
   pending: boolean;
   fieldName: string | null;
+  editMode?: boolean;
   onChange: () => void;
 }) {
   if (!fieldName) {
     return <div className="w-9 shrink-0" />;
   }
+  const disabled = pending || !editMode;
   return (
     <button
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!pending) onChange();
+        if (!disabled) onChange();
       }}
-      disabled={pending}
-      title={included ? "Remove from sitemap" : "Add to sitemap"}
+      disabled={disabled}
+      title={
+        !editMode
+          ? "Enable edit mode to change sitemap inclusion"
+          : included
+            ? "Remove from sitemap"
+            : "Add to sitemap"
+      }
       className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
         pending
           ? "opacity-60 cursor-not-allowed bg-gray-200"
-          : included
-            ? "bg-emerald-500 hover:bg-emerald-600"
-            : "bg-gray-300 hover:bg-gray-400"
+          : !editMode
+            ? "opacity-40 cursor-not-allowed " +
+              (included ? "bg-emerald-500" : "bg-gray-300")
+            : included
+              ? "bg-emerald-500 hover:bg-emerald-600"
+              : "bg-gray-300 hover:bg-gray-400"
       }`}
     >
       {pending ? (

@@ -4,8 +4,8 @@ import { useToast } from "~/lib/toast";
 import { useEditMode } from "~/lib/edit-mode";
 import { resolveStringField } from "~/lib/resolve-string-field";
 import { getContentType } from "~/lib/contentful/get-content-type";
-import { getEntry } from "~/lib/contentful/get-entry";
-import { getAsset } from "~/lib/contentful/get-asset";
+import { useEntry } from "~/lib/contentful/get-entry";
+import { useAsset } from "~/lib/contentful/get-asset";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
 import { PageEditorTab } from "~/components/page-editor/PageEditorTab";
 import { RichTextRenderer } from "~/components/RichTextRenderer";
@@ -212,35 +212,28 @@ function AssetThumbnail({
   assetId: string;
   locale: string;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [alt, setAlt] = useState("");
+  const { data: asset } = useAsset(assetId);
   const _pd = useRouteLoaderData("routes/home") as any;
   const _spaceId: string = _pd?.spaceId ?? "";
   const _envId: string = _pd?.environmentId ?? "";
 
-  useEffect(() => {
-    let cancelled = false;
-    getAsset(assetId).then((a) => {
-      if (cancelled) return;
-      const fields = a?.fields ?? {};
-      const fileObj =
-        fields["file"]?.[locale] ??
-        (Object.values(fields["file"] ?? {}) as any[])[0];
-      const title =
-        fields["title"]?.[locale] ??
-        (Object.values(fields["title"] ?? {}) as string[])[0] ??
-        "";
-      const raw: string | undefined = fileObj?.url;
-      const contentType: string = fileObj?.contentType ?? "";
-      if (raw && contentType.startsWith("image/")) {
-        setUrl(raw.startsWith("//") ? `https:${raw}` : raw);
-        setAlt(typeof title === "string" ? title : "");
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [assetId, locale]);
+  const fields = asset?.fields ?? {};
+  const fileObj =
+    fields["file"]?.[locale] ??
+    (Object.values(fields["file"] ?? {}) as any[])[0];
+  const titleRaw =
+    fields["title"]?.[locale] ??
+    (Object.values(fields["title"] ?? {}) as string[])[0] ??
+    "";
+  const raw: string | undefined = fileObj?.url;
+  const contentType: string = fileObj?.contentType ?? "";
+  const url =
+    raw && contentType.startsWith("image/")
+      ? raw.startsWith("//")
+        ? `https:${raw}`
+        : raw
+      : null;
+  const alt = typeof titleRaw === "string" ? titleRaw : "";
 
   if (!url) return null;
 
@@ -285,30 +278,10 @@ function AssetThumbnail({
 }
 
 function AssetCard({ assetId, locale }: { assetId: string; locale: string }) {
-  const [asset, setAsset] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: asset, isLoading: loading } = useAsset(assetId);
   const _pd = useRouteLoaderData("routes/home") as any;
   const _spaceId: string = _pd?.spaceId ?? "";
   const _envId: string = _pd?.environmentId ?? "";
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setAsset(null);
-    getAsset(assetId)
-      .then((a) => {
-        if (!cancelled) {
-          setAsset(a);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assetId]);
 
   const fields = asset?.fields ?? {};
   const title =
@@ -429,28 +402,8 @@ function findFirstAssetLinkId(
 }
 
 function ReferenceCard({ linkId, locale }: { linkId: string; locale: string }) {
-  const [entry, setEntry] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: entry, isLoading: loading } = useEntry(linkId);
   const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setEntry(null);
-    getEntry(linkId)
-      .then((e) => {
-        if (!cancelled) {
-          setEntry(e);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [linkId]);
 
   const contentTypeId = entry?.sys?.contentType?.sys?.id ?? "—";
   const fields = entry?.fields ?? {};

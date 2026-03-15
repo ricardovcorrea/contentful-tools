@@ -1,7 +1,10 @@
 import { getContentfulManagementClient } from ".";
-import { withCache } from "./cache";
+import { queryClient, QUERY_STALE_TIME } from "~/lib/query-client";
+import { queryKeys } from "~/lib/query-keys";
 
 export const getCurrentUser = () =>
-  withCache("current-user", () =>
-    getContentfulManagementClient().getCurrentUser(),
-  );
+  queryClient.ensureQueryData({
+    queryKey: queryKeys.currentUser(),
+    queryFn: () => getContentfulManagementClient().getCurrentUser(),
+    staleTime: QUERY_STALE_TIME,
+  });

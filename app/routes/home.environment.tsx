@@ -140,6 +140,8 @@ function TranslationCoverageCard({
   onViewPartner,
   opcoHasLocalizable,
   partnerHasLocalizable,
+  opcoName,
+  partnerName,
 }: {
   entryCount: number;
   combinedStats: ReturnType<typeof getMissingStats>;
@@ -149,6 +151,8 @@ function TranslationCoverageCard({
   onViewPartner?: () => void;
   opcoHasLocalizable: boolean;
   partnerHasLocalizable: boolean;
+  opcoName: string;
+  partnerName: string;
 }) {
   const nonDefaultLocales = locales.filter((l) => !l.default);
   const { localizableEntries, entriesWithMissing, missingPerLocale } =
@@ -290,9 +294,9 @@ function TranslationCoverageCard({
             {onViewOpco && (
               <button
                 onClick={onViewOpco}
-                className="flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 hover:text-violet-700 transition-colors group"
+                className="flex items-center gap-1.5 text-[10px] font-semibold text-sky-600 hover:text-sky-700 transition-colors group"
               >
-                View OPCO translations
+                {opcoName} translations
                 <svg
                   className="w-3 h-3 shrink-0 group-hover:translate-x-0.5 transition-transform"
                   fill="none"
@@ -311,9 +315,9 @@ function TranslationCoverageCard({
             {onViewPartner && (
               <button
                 onClick={onViewPartner}
-                className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors group"
+                className="flex items-center gap-1.5 text-[10px] font-semibold text-sky-600 hover:text-sky-700 transition-colors group"
               >
-                View Partner translations
+                {partnerName} translations
                 <svg
                   className="w-3 h-3 shrink-0 group-hover:translate-x-0.5 transition-transform"
                   fill="none"
@@ -476,27 +480,129 @@ function ScheduledCard({
 }
 
 function UnpublishedCard({
-  entries,
+  opcoId,
+  partnerId,
 }: {
-  entries: { item: any; scope: "opco" | "partner" }[];
+  opcoId: string;
+  partnerId: string;
 }) {
   const navigate = useNavigate();
 
-  const unpublished = entries.filter(({ item }) => {
-    const pub = item.sys?.publishedAt;
-    const upd = item.sys?.updatedAt;
-    if (!pub) return true;
-    return upd && new Date(upd) > new Date(pub);
-  });
+  type FetchState =
+    | { status: "loading" }
+    | { status: "error" }
+    | {
+        status: "done";
+        total: number;
+        drafts: number;
+        modified: number;
+        opcoCount: number;
+        partnerCount: number;
+      };
 
-  const drafts = unpublished.filter(({ item }) => !item.sys?.publishedAt);
-  const modified = unpublished.filter(({ item }) => !!item.sys?.publishedAt);
-  const opcoCount = unpublished.filter(({ scope }) => scope === "opco").length;
-  const partnerCount = unpublished.filter(
-    ({ scope }) => scope === "partner",
-  ).length;
-  const total = unpublished.length;
-  const allGood = total === 0;
+  const [state, setState] = useState<FetchState>({ status: "loading" });
+
+  useEffect(() => {
+    if (!opcoId || !partnerId) {
+      setState({
+        status: "done",
+        total: 0,
+        drafts: 0,
+        modified: 0,
+        opcoCount: 0,
+        partnerCount: 0,
+      });
+      return;
+    }
+    let cancelled = false;
+    setState({ status: "loading" });
+
+    const isUnpublished = (item: any) => {
+      const neverPublished = !item.sys?.publishedAt;
+      if (neverPublished) return true;
+      return (
+        !!item.sys?.updatedAt &&
+        new Date(item.sys.updatedAt) > new Date(item.sys.publishedAt)
+      );
+    };
+
+    Promise.all([
+      getContentfulManagementEntries({
+        content_type: "page",
+        "fields.opco.fields.id": opcoId.toLowerCase(),
+        "fields.opco.sys.contentType.sys.id": "opco",
+        limit: 1000,
+      }),
+      getContentfulManagementEntries({
+        content_type: "message",
+        "fields.opco.fields.id": opcoId.toLowerCase(),
+        "fields.opco.sys.contentType.sys.id": "opco",
+        limit: 1000,
+      }),
+      getContentfulManagementEntries({
+        content_type: "page",
+        "fields.opco.fields.id": opcoId.toLowerCase(),
+        "fields.opco.sys.contentType.sys.id": "opco",
+        "fields.partner.fields.id": partnerId.toLowerCase(),
+        "fields.partner.sys.contentType.sys.id": "partner",
+        limit: 1000,
+      }),
+      getContentfulManagementEntries({
+        content_type: "message",
+        "fields.opco.fields.id": opcoId.toLowerCase(),
+        "fields.opco.sys.contentType.sys.id": "opco",
+        "fields.partner.fields.id": partnerId.toLowerCase(),
+        "fields.partner.sys.contentType.sys.id": "partner",
+        limit: 1000,
+      }),
+      getContentfulManagementEntries({
+        content_type: "emailVoucherConfirmation",
+        "fields.opco.fields.id": opcoId.toLowerCase(),
+        "fields.opco.sys.contentType.sys.id": "opco",
+        "fields.partner.fields.id": partnerId.toLowerCase(),
+        "fields.partner.sys.contentType.sys.id": "partner",
+        limit: 1000,
+      }),
+    ])
+      .then(
+        ([
+          opcoPages,
+          opcoMessages,
+          partnerPages,
+          partnerMessages,
+          partnerEmails,
+        ]) => {
+          if (cancelled) return;
+          const opcoItems = [
+            ...opcoPages.items.filter((i: any) => !i.fields?.partner),
+            ...opcoMessages.items.filter((i: any) => !i.fields?.partner),
+          ].filter(isUnpublished);
+          const partnerItems = [
+            ...partnerPages.items,
+            ...partnerMessages.items,
+            ...partnerEmails.items,
+          ].filter(isUnpublished);
+          const all = [...opcoItems, ...partnerItems];
+          setState({
+            status: "done",
+            total: all.length,
+            drafts: all.filter((i) => !i.sys?.publishedAt).length,
+            modified: all.filter((i) => !!i.sys?.publishedAt).length,
+            opcoCount: opcoItems.length,
+            partnerCount: partnerItems.length,
+          });
+        },
+      )
+      .catch(() => {
+        if (!cancelled) setState({ status: "error" });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [opcoId, partnerId]);
+
+  const allGood = state.status === "done" && state.total === 0;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
@@ -505,15 +611,38 @@ function UnpublishedCard({
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
           Unpublished Content
         </p>
-        {!allGood && (
+        {state.status === "done" && !allGood && (
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200/60">
-            {total}
+            {state.total}
           </span>
         )}
       </div>
 
       {/* Body */}
-      {allGood ? (
+      {state.status === "loading" ? (
+        <div className="flex flex-col items-center justify-center flex-1 py-10 gap-2 text-gray-300">
+          <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
+          </svg>
+          <p className="text-xs">Loading…</p>
+        </div>
+      ) : state.status === "error" ? (
+        <div className="flex flex-col items-center justify-center flex-1 py-10 gap-2 text-red-400">
+          <p className="text-xs font-medium">Failed to load</p>
+        </div>
+      ) : allGood ? (
         <div className="flex flex-col items-center justify-center flex-1 py-10 gap-2 text-gray-400">
           <svg
             className="w-7 h-7"
@@ -535,10 +664,10 @@ function UnpublishedCard({
           {/* Big stat */}
           <div className="flex items-end gap-3">
             <span className="text-4xl font-extrabold text-amber-500 leading-none tabular-nums">
-              {total}
+              {state.total}
             </span>
             <span className="text-xs font-medium text-gray-400 mb-1">
-              {total === 1 ? "entry" : "entries"} need publishing
+              {state.total === 1 ? "entry" : "entries"} need publishing
             </span>
           </div>
 
@@ -549,7 +678,7 @@ function UnpublishedCard({
                 Draft
               </span>
               <span className="text-xl font-bold text-gray-700 tabular-nums leading-tight">
-                {drafts.length}
+                {state.drafts}
               </span>
             </div>
             <div className="flex-1 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 flex flex-col gap-0.5">
@@ -557,21 +686,23 @@ function UnpublishedCard({
                 Modified
               </span>
               <span className="text-xl font-bold text-amber-600 tabular-nums leading-tight">
-                {modified.length}
+                {state.modified}
               </span>
             </div>
           </div>
 
           {/* Scope breakdown */}
           <div className="flex gap-2 flex-wrap">
-            {opcoCount > 0 && (
+            {state.opcoCount > 0 && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-200/60">
-                <span className="font-bold">{opcoCount}</span> OPCO
+                <span className="font-bold">{state.opcoCount}</span> OPCO{" "}
+                {state.opcoCount === 1 ? "entry" : "entries"}
               </span>
             )}
-            {partnerCount > 0 && (
+            {state.partnerCount > 0 && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/60">
-                <span className="font-bold">{partnerCount}</span> Partner
+                <span className="font-bold">{state.partnerCount}</span> Partner{" "}
+                {state.partnerCount === 1 ? "entry" : "entries"}
               </span>
             )}
           </div>
@@ -790,20 +921,14 @@ export default function EnvironmentOverview() {
           }
           opcoHasLocalizable={opcoHasLocalizable}
           partnerHasLocalizable={partnerHasLocalizable}
+          opcoName={opcoName}
+          partnerName={partnerName}
         />
       </div>
 
       {/* Row 3: unpublished + scheduled */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <UnpublishedCard
-          entries={[
-            ...allOpcoEntries.map((item) => ({ item, scope: "opco" as const })),
-            ...allPartnerEntries.map((item) => ({
-              item,
-              scope: "partner" as const,
-            })),
-          ]}
-        />
+        <UnpublishedCard opcoId={opcoId} partnerId={partnerId} />
         <ScheduledCard actions={scheduledActions} />
       </div>
     </main>

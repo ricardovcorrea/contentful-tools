@@ -4,11 +4,15 @@ import {
   getContentfulManagementEnvironment,
   getContentfulManagementEntries,
 } from "~/lib/contentful";
-import { invalidateCacheKey } from "~/lib/contentful/cache";
-import { ENTRY_CACHE_KEY } from "~/lib/contentful/get-entry";
+import { invalidateEntry } from "~/lib/contentful/get-entry";
+import { queryClient } from "~/lib/query-client";
+import { queryKeys } from "~/lib/query-keys";
 import { resolveStringField } from "~/lib/resolve-string-field";
 import { useToast } from "~/lib/toast";
 import { useEditMode } from "~/lib/edit-mode";
+import { serializeCsvValue } from "~/lib/csv";
+import { EntryDiffModal } from "~/components/overview/modals/EntryDiffModal";
+import type { EntryDiffModalState } from "~/types/contentful";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,7 +39,7 @@ type UnpublishedItem = {
   status: "draft" | "changed";
 };
 
-// ── clientLoader — always fetches fresh, no cache, no reference tree ──────────
+// ── clientLoader — always fetches fresh, bypasses cache entirely ─────────────
 
 export async function clientLoader(): Promise<LoaderData> {
   const opcoId = localStorage.getItem("selectedOpco") ?? "";
@@ -52,7 +56,6 @@ export async function clientLoader(): Promise<LoaderData> {
     };
   }
 
-  // Call getContentfulManagementEntries directly — bypasses withCache entirely.
   const [
     rawOpcoPages,
     rawOpcoMessages,
@@ -127,7 +130,8 @@ function buildUnpublishedItems(
         const neverPublished = !item.sys?.publishedAt;
         const hasChanges =
           !neverPublished &&
-          (item.sys?.version ?? 1) > (item.sys?.publishedVersion ?? 0);
+          !!item.sys?.updatedAt &&
+          new Date(item.sys.updatedAt) > new Date(item.sys.publishedAt);
         if (!neverPublished && !hasChanges) return null;
         return {
           item,
@@ -199,6 +203,8 @@ export default function UnpublishedPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<"all" | "draft" | "changed">("all");
   const [search, setSearch] = useState("");
+  const [entryDiffModal, setEntryDiffModal] =
+    useState<EntryDiffModalState>(null);
 
   // Stable IDs — fall back to empty string until data is ready (guard handles null).
   const opcoId = ctx?.opcoId ?? "";
@@ -221,18 +227,44 @@ export default function UnpublishedPage() {
 
   // Invalidate all group-level cache keys so other views reload fresh data.
   const invalidateGroupCaches = useCallback(() => {
-    invalidateCacheKey(`opco-pages:${opcoId}`);
-    invalidateCacheKey(`opco-messages:${opcoId}`);
-    invalidateCacheKey(`opco-refs:${opcoId}`);
-    invalidateCacheKey(`partner-pages:${opcoId}:${partnerId}`);
-    invalidateCacheKey(`partner-messages:${opcoId}:${partnerId}`);
-    invalidateCacheKey(`partner-emails:${opcoId}:${partnerId}`);
-    invalidateCacheKey(`partner-refs:${opcoId}:${partnerId}`);
+    queryClient.invalidateQueries({ queryKey: queryKeys.opcoPages(opcoId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.opcoMessages(opcoId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.opcoRefs(opcoId) });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.partnerPages(opcoId, partnerId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.partnerMessages(opcoId, partnerId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.partnerEmails(opcoId, partnerId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.partnerRefs(opcoId, partnerId),
+    });
+    // Also bust the unpublished-specific queries so next visit reloads fresh.
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.unpublishedOpcoPages(opcoId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.unpublishedOpcoMessages(opcoId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.unpublishedPartnerPages(opcoId, partnerId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.unpublishedPartnerMessages(opcoId, partnerId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.unpublishedPartnerEmails(opcoId, partnerId),
+    });
   }, [opcoId, partnerId]);
 
-  /** Publish one entry. If the SDK throws but the entry is verifiably published,
-   *  treat it as success (Contentful can fail to parse its own response, and
-   *  eventual-consistency means version numbers may lag behind). */
+  /** Publish one entry. The Contentful SDK occasionally throws even when the
+   *  publish succeeds (response-parsing race, 502 from their CDN, etc.).
+   *  We retry the status check a few times before surfacing the error.
+   *  "Success" = publishedVersion is current (or one behind, since publish
+   *  itself increments the version) OR publishedAt is fresh (< 60 s). */
   const publishEntry = useCallback(async (entryId: string): Promise<any> => {
     const env = await getContentfulManagementEnvironment();
     const mgmtEntry = await env.getEntry(entryId);
@@ -241,20 +273,26 @@ export default function UnpublishedPage() {
       const result = await mgmtEntry.publish();
       return result?.sys ?? result;
     } catch (publishErr) {
-      // Wait briefly so Contentful's eventual consistency can settle before
-      // we re-check — avoids racing against the write propagating.
-      await new Promise((r) => setTimeout(r, 800));
-      try {
-        const rechecked = await env.getEntry(entryId);
-        const publishedAt = rechecked.sys?.publishedAt
-          ? new Date(rechecked.sys.publishedAt).getTime()
-          : 0;
-        // If the entry now shows as published within 30 s of our attempt,
-        // treat the operation as a success regardless of version numbers.
-        if (publishedAt >= attemptedAt - 30_000) return rechecked.sys;
-      } catch {
-        // Re-check failed (e.g. transient network error) — fall through and
-        // surface the original publish error to the caller.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        // Back-off: 1 s, 2 s, 3 s — gives Contentful time to propagate.
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        try {
+          const rechecked = await env.getEntry(entryId);
+          const pv = rechecked.sys?.publishedVersion ?? -1;
+          const v = rechecked.sys?.version ?? 0;
+          const publishedAt = rechecked.sys?.publishedAt
+            ? new Date(rechecked.sys.publishedAt).getTime()
+            : 0;
+          // publishedVersion >= version - 1: the current (or previous) version
+          // is published. The version number increments on publish so we allow
+          // one step of drift.
+          // publishedAt >= attemptedAt - 60_000: fresh timestamp fallback.
+          if (pv >= v - 1 || publishedAt >= attemptedAt - 60_000) {
+            return rechecked.sys;
+          }
+        } catch {
+          // re-check network error — keep retrying
+        }
       }
       throw publishErr;
     }
@@ -269,7 +307,7 @@ export default function UnpublishedPage() {
         if (cached && publishedSys)
           Object.assign(cached.item.sys, publishedSys);
         invalidateGroupCaches();
-        invalidateCacheKey(ENTRY_CACHE_KEY(entryId));
+        invalidateEntry(entryId, opcoId, partnerId);
         setPublishingEntries((prev) => ({ ...prev, [entryId]: "done" }));
         addToast("Entry published", "success");
       } catch {
@@ -277,7 +315,14 @@ export default function UnpublishedPage() {
         addToast("Failed to publish entry", "error");
       }
     },
-    [allUnpublished, addToast, publishEntry, invalidateGroupCaches],
+    [
+      allUnpublished,
+      addToast,
+      publishEntry,
+      invalidateGroupCaches,
+      opcoId,
+      partnerId,
+    ],
   );
 
   const handlePublishSelected = useCallback(async () => {
@@ -297,7 +342,7 @@ export default function UnpublishedPage() {
           const cached = allUnpublished.find((u) => u.item.sys.id === id);
           if (cached && publishedSys)
             Object.assign(cached.item.sys, publishedSys);
-          invalidateCacheKey(ENTRY_CACHE_KEY(id));
+          invalidateEntry(id, opcoId, partnerId);
           setPublishingEntries((prev) => ({ ...prev, [id]: "done" }));
           ok++;
         } catch {
@@ -312,6 +357,94 @@ export default function UnpublishedPage() {
     if (fail > 0)
       addToast(`${fail} entr${fail === 1 ? "y" : "ies"} failed`, "error");
   }, [selected, allUnpublished, addToast, publishEntry, invalidateGroupCaches]);
+
+  const handleViewEntryDiff = useCallback(
+    async (item: any) => {
+      const entryId = item.sys.id;
+      const name =
+        resolveStringField(item.fields?.["internalName"], firstLocale) ||
+        resolveStringField(item.fields?.["title"], firstLocale) ||
+        entryId;
+      setEntryDiffModal({
+        entryId,
+        entryName: name,
+        loading: true,
+        error: null,
+        rows: [],
+      });
+      try {
+        const environment = await getContentfulManagementEnvironment();
+        const snapshots = await environment.getEntrySnapshots(entryId);
+        // publishedVersion is the entry's sys.version at the time it was published.
+        // Contentful stores a snapshot of that exact version.
+        const publishedVersion = item.sys.publishedVersion ?? 0;
+        const publishedSnapshot =
+          snapshots.items.find(
+            (s: any) => s.snapshot?.sys?.version === publishedVersion,
+          ) ??
+          // Fallback: try publishedVersion+1 in case of off-by-one in older entries
+          snapshots.items.find(
+            (s: any) => s.snapshot?.sys?.version === publishedVersion + 1,
+          ) ??
+          snapshots.items[0];
+        if (!publishedSnapshot) {
+          setEntryDiffModal({
+            entryId,
+            entryName: name,
+            loading: false,
+            error: "No published snapshot found for this entry.",
+            rows: [],
+          });
+          return;
+        }
+        const publishedFields: Record<
+          string,
+          Record<string, unknown>
+        > = publishedSnapshot.snapshot?.fields ?? {};
+        const draftFields: Record<
+          string,
+          Record<string, unknown>
+        > = item.fields ?? {};
+        const allFieldIds = Array.from(
+          new Set([
+            ...Object.keys(publishedFields),
+            ...Object.keys(draftFields),
+          ]),
+        );
+        const rows: NonNullable<EntryDiffModalState>["rows"] = [];
+        for (const fieldId of allFieldIds) {
+          const pubField = publishedFields[fieldId] ?? {};
+          const draftField = draftFields[fieldId] ?? {};
+          const allLocales = Array.from(
+            new Set([...Object.keys(pubField), ...Object.keys(draftField)]),
+          );
+          for (const locale of allLocales) {
+            const published = serializeCsvValue(pubField[locale]);
+            const draft = serializeCsvValue(draftField[locale]);
+            if (published !== draft) {
+              rows.push({ fieldId, locale, published, draft });
+            }
+          }
+        }
+        setEntryDiffModal({
+          entryId,
+          entryName: name,
+          loading: false,
+          error: null,
+          rows,
+        });
+      } catch (err: any) {
+        setEntryDiffModal({
+          entryId,
+          entryName: name,
+          loading: false,
+          error: err?.message ?? "Failed to load diff",
+          rows: [],
+        });
+      }
+    },
+    [firstLocale],
+  );
 
   // ── All hooks above this line ─────────────────────────────────────────────
 
@@ -688,6 +821,17 @@ export default function UnpublishedPage() {
                               </svg>
                             </a>
 
+                            {/* Changes diff button — only for modified entries */}
+                            {status === "changed" &&
+                              publishState !== "done" && (
+                                <button
+                                  onClick={() => handleViewEntryDiff(item)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+                                >
+                                  Changes
+                                </button>
+                              )}
+
                             {/* Publish button */}
                             {publishState !== "done" && (
                               <button
@@ -777,6 +921,14 @@ export default function UnpublishedPage() {
           </div>
         )}
       </div>
+
+      {/* Entry diff modal */}
+      <EntryDiffModal
+        modal={entryDiffModal}
+        onClose={() => setEntryDiffModal(null)}
+        spaceId={spaceId}
+        environmentId={environmentId}
+      />
     </main>
   );
 }

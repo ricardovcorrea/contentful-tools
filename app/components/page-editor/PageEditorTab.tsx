@@ -1166,12 +1166,14 @@ function FieldValueCell({
   activeLocale,
   selectedId,
   actions,
+  readOnly,
 }: {
   fieldId: string;
   val: any;
   activeLocale: string;
   selectedId: string;
   actions: any;
+  readOnly?: boolean;
 }) {
   const rendered = renderFieldValue(val);
 
@@ -1235,6 +1237,14 @@ function FieldValueCell({
     });
   }
 
+  if (isEditable && readOnly) {
+    return (
+      <span className="text-xs text-gray-600 wrap-break-word">
+        {String(val)}
+      </span>
+    );
+  }
+
   if (isEditable && isLong) {
     return (
       <textarea
@@ -1269,6 +1279,7 @@ function FieldValueCell({
 type PropTab = "common" | "all" | string; // string = a locale code
 
 function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
+  const { editMode: globalEditMode } = useGlobalEditMode();
   const { selectedId, nodeProps, nodeRole, actions } = useEditor((state) => {
     const id = [...state.events.selected][0];
     if (!id || id === "ROOT")
@@ -1371,6 +1382,7 @@ function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
           activeLocale={locale}
           selectedId={selectedId!}
           actions={actions}
+          readOnly={!globalEditMode}
         />
       </div>
     );
@@ -1496,6 +1508,7 @@ function PropertiesPanel({ locale: defaultLocale }: { locale: string }) {
                       activeLocale={loc}
                       selectedId={selectedId}
                       actions={actions}
+                      readOnly={!globalEditMode}
                     />
                   </div>
                 ))}
@@ -1889,8 +1902,6 @@ function EditorToolbar({
   onZoomReset,
   fullscreen,
   onFullscreenToggle,
-  onEditToggle,
-  editingEnabled,
 }: {
   pendingChanges: PendingChange[];
   onSaveClick: () => void;
@@ -1900,10 +1911,7 @@ function EditorToolbar({
   onZoomReset: () => void;
   fullscreen: boolean;
   onFullscreenToggle: () => void;
-  onEditToggle: () => void;
-  editingEnabled: boolean;
 }) {
-  const editMode = useContext(EditModeContext);
   const hasChanges = pendingChanges.length > 0;
 
   return (
@@ -2011,28 +2019,6 @@ function EditorToolbar({
           {pendingChanges.length > 1 ? "s" : ""}
         </button>
       )}
-
-      {/* Edit toggle */}
-      <label
-        className={`flex items-center gap-1.5 select-none ${
-          editingEnabled ? "cursor-pointer" : "cursor-not-allowed opacity-50"
-        }`}
-        title={
-          editingEnabled ? undefined : "Enable Edit mode to reorder sections"
-        }
-      >
-        <span className="text-xs text-gray-500">
-          {editMode ? "Editing" : "Viewing"}
-        </span>
-        <div
-          onClick={() => editingEnabled && onEditToggle()}
-          className={`relative w-9 h-5 rounded-full transition-colors ${editMode ? "bg-gray-700" : "bg-gray-300"}`}
-        >
-          <span
-            className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editMode ? "translate-x-4" : ""}`}
-          />
-        </div>
-      </label>
     </div>
   );
 }
@@ -2053,13 +2039,7 @@ export function PageEditorTab({
   const [activePanel, setActivePanel] = useState<"layers" | "properties">(
     "properties",
   );
-  const [editMode, setEditMode] = useState(false);
   const { editMode: globalEditMode } = useGlobalEditMode();
-
-  // Reset local drag-edit mode whenever the global edit mode is turned off
-  useEffect(() => {
-    if (!globalEditMode) setEditMode(false);
-  }, [globalEditMode]);
 
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -2205,7 +2185,7 @@ export function PageEditorTab({
           fullscreen ? "fixed inset-0 z-50 rounded-none" : "h-full rounded-xl"
         }`}
       >
-        <EditModeContext.Provider value={editMode}>
+        <EditModeContext.Provider value={globalEditMode}>
           <Editor resolver={RESOLVER} enabled={true}>
             <SaveController
               pageEntryId={entryId}
@@ -2225,8 +2205,6 @@ export function PageEditorTab({
               onZoomReset={() => setZoom(1)}
               fullscreen={fullscreen}
               onFullscreenToggle={() => setFullscreen((f) => !f)}
-              onEditToggle={() => setEditMode((m) => !m)}
-              editingEnabled={globalEditMode}
             />
 
             <div className="flex flex-1 overflow-hidden">

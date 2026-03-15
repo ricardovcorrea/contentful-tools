@@ -6,12 +6,14 @@ export function PageRow({
   spaceId,
   environmentId,
   pending = false,
+  editMode = true,
   onToggle,
 }: {
   page: SitemapPage;
   spaceId: string;
   environmentId: string;
   pending?: boolean;
+  editMode?: boolean;
   onToggle?: (page: SitemapPage, newIncluded: boolean) => void;
 }) {
   const url = `https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${page.sysId}`;
@@ -93,6 +95,7 @@ export function PageRow({
         included={page.sitemapIncluded}
         pending={pending}
         fieldName={page.sitemapField}
+        editMode={editMode}
         onChange={() => onToggle?.(page, !page.sitemapIncluded)}
       />
     </div>

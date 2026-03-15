@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouteLoaderData, useNavigate } from "react-router";
 import { useToast } from "~/lib/toast";
 import { useEditMode } from "~/lib/edit-mode";
 import { getContentType } from "~/lib/contentful/get-content-type";
-import { getAsset } from "~/lib/contentful/get-asset";
+import { useAsset } from "~/lib/contentful/get-asset";
+import { resolveImageUrl } from "~/lib/format";
 import { getEntry, invalidateEntry } from "~/lib/contentful/get-entry";
+import { queryKeys } from "~/lib/query-keys";
 import { getContentfulManagementEnvironment } from "~/lib/contentful";
 import { clearCache } from "~/lib/contentful/cache";
 import { resolveStringField } from "~/lib/resolve-string-field";
@@ -25,6 +28,7 @@ import {
 import { ImportDiffModal } from "~/components/overview/modals/ImportDiffModal";
 import { ApplyProgressModal } from "~/components/overview/modals/ApplyProgressModal";
 import { EntryDiffModal } from "~/components/overview/modals/EntryDiffModal";
+import type { EntryDiffModalState } from "~/types/contentful";
 import {
   parseCsv as _parseCsv,
   serializeCsvValue as _serializeCsvValue,
@@ -75,28 +79,10 @@ function AssetCell({
   assetId: string;
   firstLocale: string;
 }) {
-  const [asset, setAsset] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: asset, isLoading: loading } = useAsset(assetId);
   const _pd = useRouteLoaderData("routes/home") as any;
   const _spaceId: string = _pd?.spaceId ?? "";
   const _envId: string = _pd?.environmentId ?? "";
-
-  useEffect(() => {
-    let cancelled = false;
-    getAsset(assetId)
-      .then((a) => {
-        if (!cancelled) {
-          setAsset(a);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assetId]);
 
   const fields = asset?.fields ?? {};
   const title =
@@ -129,7 +115,10 @@ function AssetCell({
       {isImage && url && (
         <div className="relative group">
           <img
-            src={url}
+            src={
+              resolveImageUrl(fileObj?.url, { h: 160, fm: "webp", q: 80 }) ??
+              url
+            }
             alt={typeof title === "string" ? title : assetId}
             className="max-h-20 max-w-full rounded object-contain"
           />
@@ -483,6 +472,12 @@ function GroupTable({
     useLocalizableFields(contentTypeId);
 
   const { editMode } = useEditMode();
+  const queryClientInstance = useQueryClient();
+  const _homeData = useRouteLoaderData("routes/home") as
+    | { opcoId?: string; partnerId?: string }
+    | undefined;
+  const _opcoId = _homeData?.opcoId ?? "";
+  const _partnerId = _homeData?.partnerId ?? "";
 
   // ── Inline edit state ──────────────────────────────────────────────
   const [localEdits, setLocalEdits] = useState<Record<string, unknown>>({});
@@ -529,15 +524,26 @@ function GroupTable({
               : value;
         cfEntry.fields[fieldId][lc] = valueToSave;
         await cfEntry.update();
-        // Mutate the cached list item in-place so the value persists across
-        // re-renders and future reads without needing a full data reload.
-        const cachedItem = group.items.find((i: any) => i.sys.id === entryId);
-        if (cachedItem) {
-          cachedItem.fields[fieldId] ??= {};
-          cachedItem.fields[fieldId][lc] = valueToSave;
-        }
-        // Invalidate the per-entry cache so getEntry() callers also get fresh data.
-        invalidateEntry(entryId);
+        // Write the updated value into the TanStack Query cache so all
+        // subscribers (useEntry hooks) see fresh data immediately.
+        queryClientInstance.setQueryData(
+          queryKeys.entry(entryId, _opcoId, _partnerId),
+          (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              fields: {
+                ...old.fields,
+                [fieldId]: {
+                  ...(old.fields[fieldId] ?? {}),
+                  [lc]: valueToSave,
+                },
+              },
+            };
+          },
+        );
+        // Invalidate so next background refetch gets the latest from Contentful.
+        invalidateEntry(entryId, _opcoId, _partnerId);
         setLocalEdits((prev) => ({ ...prev, [ck]: valueToSave }));
         setEditingCell(null);
         setEditingValue("");
@@ -550,7 +556,7 @@ function GroupTable({
         setSavingCell(null);
       }
     },
-    [group.items],
+    [queryClientInstance, _opcoId, _partnerId],
   );
 
   const getName = (fields: Record<string, any>) => {
@@ -1120,6 +1126,7 @@ export default function OverviewPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { editMode } = useEditMode();
+  const queryClientInstance = useQueryClient();
   const parentData = useRouteLoaderData("routes/home") as ParentLoaderData;
 
   if (!parentData) return null;
@@ -1342,20 +1349,8 @@ export default function OverviewPage() {
   const [selectedUnpublished, setSelectedUnpublished] = useState<Set<string>>(
     new Set(),
   );
-  type EntryFieldDiffRow = {
-    fieldId: string;
-    locale: string;
-    published: string;
-    draft: string;
-  };
-  type EntryDiffModal = {
-    entryId: string;
-    entryName: string;
-    loading: boolean;
-    error: string | null;
-    rows: EntryFieldDiffRow[];
-  } | null;
-  const [entryDiffModal, setEntryDiffModal] = useState<EntryDiffModal>(null);
+  const [entryDiffModal, setEntryDiffModal] =
+    useState<EntryDiffModalState>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const handleViewEntryDiff = useCallback(
@@ -1379,7 +1374,12 @@ export default function OverviewPage() {
         const publishedSnapshot =
           snapshots.items.find(
             (s: any) => s.snapshot?.sys?.version === publishedVersion,
-          ) ?? snapshots.items[0];
+          ) ??
+          // Fallback: try publishedVersion+1 in case of off-by-one in older entries
+          snapshots.items.find(
+            (s: any) => s.snapshot?.sys?.version === publishedVersion + 1,
+          ) ??
+          snapshots.items[0];
         if (!publishedSnapshot) {
           setEntryDiffModal({
             entryId,
@@ -1404,7 +1404,7 @@ export default function OverviewPage() {
             ...Object.keys(draftFields),
           ]),
         );
-        const rows: EntryFieldDiffRow[] = [];
+        const rows: NonNullable<EntryDiffModalState>["rows"] = [];
         for (const fieldId of allFieldIds) {
           const pubField = publishedFields[fieldId] ?? {};
           const draftField = draftFields[fieldId] ?? {};
@@ -3145,178 +3145,13 @@ export default function OverviewPage() {
           );
         })()}
 
-      {/* ── Entry diff modal ──────────────────────────────────────────────── */}
-      {entryDiffModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setEntryDiffModal(null)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[85vh] flex flex-col mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 shrink-0">
-              <svg
-                className="w-5 h-5 text-amber-500 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800">
-                  Changes in{" "}
-                  <span className="font-mono">{entryDiffModal.entryName}</span>
-                </p>
-                <p className="text-[10px] font-mono text-gray-400 mt-0.5">
-                  {entryDiffModal.entryId} &middot; published ↔ current draft
-                </p>
-              </div>
-              <button
-                onClick={() => setEntryDiffModal(null)}
-                className="shrink-0 p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="flex-1 overflow-auto px-6 py-4">
-              {entryDiffModal.loading ? (
-                <div className="flex items-center justify-center py-16 gap-3 text-gray-400">
-                  <svg
-                    className="w-5 h-5 animate-spin"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8H4z"
-                    />
-                  </svg>
-                  <span className="text-sm">Loading snapshot…</span>
-                </div>
-              ) : entryDiffModal.error ? (
-                <div className="flex items-center gap-2 py-16 justify-center text-red-500">
-                  <svg
-                    className="w-4 h-4 shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"
-                    />
-                  </svg>
-                  <span className="text-sm">{entryDiffModal.error}</span>
-                </div>
-              ) : entryDiffModal.rows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-2 text-gray-400">
-                  <svg
-                    className="w-8 h-8"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <p className="text-sm font-medium">
-                    No field changes detected
-                  </p>
-                </div>
-              ) : (
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-gray-200">
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-36">
-                        Field
-                      </th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-20">
-                        Locale
-                      </th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-1/2">
-                        Published
-                      </th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-1/2">
-                        Current draft
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entryDiffModal.rows.map((row, i) => (
-                      <tr
-                        key={`${row.fieldId}-${row.locale}`}
-                        className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}
-                      >
-                        <td className="py-3 px-3 align-top font-mono text-[11px] text-gray-500 border-b border-gray-100">
-                          {row.fieldId}
-                        </td>
-                        <td className="py-3 px-3 align-top text-[11px] font-semibold text-blue-600 border-b border-gray-100">
-                          {row.locale}
-                        </td>
-                        <td className="py-3 px-3 align-top text-xs border-b border-gray-100 wrap-break-word max-w-0">
-                          {row.published ? (
-                            <span className="inline-block bg-red-50 text-red-700 px-1.5 py-0.5 rounded whitespace-pre-wrap">
-                              {row.published}
-                            </span>
-                          ) : (
-                            <span className="italic text-gray-300">—</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 align-top text-xs border-b border-gray-100 wrap-break-word max-w-0">
-                          {row.draft ? (
-                            <span className="inline-block bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded whitespace-pre-wrap">
-                              {row.draft}
-                            </span>
-                          ) : (
-                            <span className="italic text-gray-300">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Entry diff modal */}
+      <EntryDiffModal
+        modal={entryDiffModal}
+        onClose={() => setEntryDiffModal(null)}
+        spaceId={spaceId}
+        environmentId={environmentId}
+      />
     </main>
   );
 }

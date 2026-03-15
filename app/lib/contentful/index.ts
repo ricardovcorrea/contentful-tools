@@ -1,7 +1,9 @@
 import { createClient } from "contentful";
 import type { ClientAPI, QueryOptions } from "contentful-management";
 import * as contentfulManagement from "contentful-management";
-import { withCache, clearCache } from "./cache";
+import { clearCache } from "./cache";
+import { queryClient } from "~/lib/query-client";
+import { queryKeys } from "~/lib/query-keys";
 
 let contentfulClient: ReturnType<typeof createClient>;
 let contentfulManagementClient: ClientAPI;
@@ -39,8 +41,6 @@ export const clearContentfulManagementClient = () => {
   clearCache();
 };
 
-const MANAGEMENT_ENV_KEY = "management-environment";
-
 const resolveManagementEnvironment = async () => {
   const client = getContentfulManagementClient();
   const spaceId = getStoredValue("contentfulSpaceId");
@@ -50,7 +50,11 @@ const resolveManagementEnvironment = async () => {
 };
 
 const getManagementEnvironment = () =>
-  withCache(MANAGEMENT_ENV_KEY, resolveManagementEnvironment);
+  queryClient.ensureQueryData({
+    queryKey: queryKeys.managementEnvironment(),
+    queryFn: resolveManagementEnvironment,
+    staleTime: Infinity,
+  });
 
 export const getContentfulManagementEntries = async (query: QueryOptions) => {
   const environment = await getManagementEnvironment();

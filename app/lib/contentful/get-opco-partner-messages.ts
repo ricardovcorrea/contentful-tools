@@ -1,13 +1,17 @@
 import { getContentfulManagementEntries } from ".";
-import { withCache } from "./cache";
+import { queryClient, QUERY_STALE_TIME } from "~/lib/query-client";
+import { queryKeys } from "~/lib/query-keys";
 
 export const getOpcoPartnerMessages = (opcoId: string, partnerId: string) =>
-  withCache(`partner-messages:${opcoId}:${partnerId}`, () =>
-    getContentfulManagementEntries({
-      content_type: "message",
-      "fields.opco.fields.id": opcoId.toLowerCase(),
-      "fields.opco.sys.contentType.sys.id": "opco",
-      "fields.partner.fields.id": partnerId.toLowerCase(),
-      "fields.partner.sys.contentType.sys.id": "partner",
-    }),
-  );
+  queryClient.ensureQueryData({
+    queryKey: queryKeys.partnerMessages(opcoId, partnerId),
+    queryFn: () =>
+      getContentfulManagementEntries({
+        content_type: "message",
+        "fields.opco.fields.id": opcoId.toLowerCase(),
+        "fields.opco.sys.contentType.sys.id": "opco",
+        "fields.partner.fields.id": partnerId.toLowerCase(),
+        "fields.partner.sys.contentType.sys.id": "partner",
+      }),
+    staleTime: QUERY_STALE_TIME,
+  });

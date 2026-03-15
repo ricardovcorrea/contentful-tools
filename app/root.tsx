@@ -9,6 +9,10 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 import { LoadingScreen } from "~/components/loading-screen";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { queryClient } from "~/lib/query-client";
+import { EditModeProvider } from "~/lib/edit-mode";
 
 export const meta: Route.MetaFunction = () => [
   { title: "Contentful Tools" },
@@ -54,7 +58,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <EditModeProvider>
+        <Outlet />
+        <ReactQueryDevtools
+          initialIsOpen={false}
+          buttonPosition="bottom-right"
+        />
+      </EditModeProvider>
+    </QueryClientProvider>
+  );
 }
 
 export function HydrateFallback() {
