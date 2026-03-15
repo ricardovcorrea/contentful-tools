@@ -131,27 +131,31 @@ export function AppHeader({
               theme="blue"
             />
             <div className="w-px h-7 bg-gray-200" />
-            <HeaderPicker
-              label="OPCO"
-              value={selectedOpco}
-              options={opcoOptions}
-              onChange={onOpcoChange}
-              disabled={isLoading}
-              theme="violet"
-              onCreate={() => openCreateNew("opco")}
-              createDisabled={!editMode}
-            />
+            <div data-tour="opco-picker">
+              <HeaderPicker
+                label="OPCO"
+                value={selectedOpco}
+                options={opcoOptions}
+                onChange={onOpcoChange}
+                disabled={isLoading}
+                theme="violet"
+                onCreate={() => openCreateNew("opco")}
+                createDisabled={!editMode}
+              />
+            </div>
             <div className="w-px h-7 bg-gray-200" />
-            <HeaderPicker
-              label="Partner"
-              value={selectedPartner}
-              options={partnerOptions}
-              onChange={onPartnerChange}
-              disabled={isLoading}
-              theme="emerald"
-              onCreate={() => openCreateNew("partner")}
-              createDisabled={!editMode}
-            />
+            <div data-tour="partner-picker">
+              <HeaderPicker
+                label="Partner"
+                value={selectedPartner}
+                options={partnerOptions}
+                onChange={onPartnerChange}
+                disabled={isLoading}
+                theme="emerald"
+                onCreate={() => openCreateNew("partner")}
+                createDisabled={!editMode}
+              />
+            </div>
           </div>
         </div>
 
@@ -159,6 +163,7 @@ export function AppHeader({
         <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-1 xl:gap-3 shrink-0">
           {/* Edit mode toggle */}
           <button
+            data-tour="edit-mode"
             onClick={toggleEditMode}
             title={
               editMode

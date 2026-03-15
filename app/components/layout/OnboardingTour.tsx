@@ -18,153 +18,158 @@ export function isTourSeen(): boolean {
   }
 }
 
-// ─── Step definitions ──────────────────────────────────────────────────────────
-
-interface Step {
-  /** data-tour attribute value to spotlight; null = centred welcome card */
-  target: string | null;
-  /** Preferred tooltip side relative to the target */
-  side?: "right" | "left" | "bottom" | "top";
-  title: string;
-  body: string;
-  icon: React.ReactNode;
-  accent: string;
-  accentText: string;
+// ─── Style overrides to match the app’s design system ─────────────────────────────
+const TOUR_CSS = `
+.driver-popover {
+  font-family: inherit;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 20px 30px -8px rgba(0,0,0,.13), 0 6px 12px -4px rgba(0,0,0,.08);
+  padding: 0;
+  overflow: hidden;
+  max-width: 300px;
+  min-width: 250px;
+  background: #fff;
 }
+.driver-popover-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #111827;
+  padding: 14px 36px 0 16px;
+  line-height: 1.35;
+  margin: 0;
+}
+.driver-popover-description {
+  font-size: 0.72rem;
+  color: #6b7280;
+  line-height: 1.65;
+  padding: 5px 16px 14px 16px;
+  margin: 0;
+}
+.driver-popover-footer {
+  border-top: 1px solid #f3f4f6;
+  background: #f9fafb;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.driver-popover-prev-btn {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6b7280;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+.driver-popover-prev-btn:hover { background: #f3f4f6; color: #111827; }
+.driver-popover-next-btn,
+.driver-popover-done-btn {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: #2563eb;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  box-shadow: 0 1px 3px rgba(37,99,235,.3);
+  line-height: 1;
+}
+.driver-popover-next-btn:hover,
+.driver-popover-done-btn:hover { background: #1d4ed8; }
+.driver-popover-close-btn {
+  font-size: 13px;
+  color: #9ca3af;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  line-height: 1;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.driver-popover-close-btn:hover { background: #f3f4f6; color: #374151; }
+.driver-popover-progress-text {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-right: auto;
+}
+.driver-popover-navigation-btns { gap: 6px; display: flex; }
+`;
 
-const STEPS: Step[] = [
+// ─── Step definitions ───────────────────────────────────────────────────────────────
+const STEPS = [
   {
-    target: null,
-    title: "Welcome to Avios Content Tools",
-    body: "A focused workspace for managing translations, reviewing drafts, and publishing content — entirely in the browser. This quick tour highlights the key parts of the interface.",
-    accent: "bg-blue-50",
-    accentText: "text-blue-500",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.7}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4 6h16M4 10h16M4 14h10M4 18h6"
-        />
-      </svg>
-    ),
+    target: null as string | null,
+    side: undefined as "right" | "left" | "bottom" | "top" | undefined,
+    title: "Welcome to Avios Content Tools 👋",
+    body: "A focused workspace for managing Contentful content across OPCOs and partners. This quick tour walks you through the key parts of the interface so you’re up and running in minutes.",
   },
   {
-    target: "opco-section",
-    side: "right",
-    title: "OPCO & Partner scope",
-    body: "All content is scoped to an OPCO and a Partner. Expand this section to browse and navigate to OPCO or partner-specific entries. Everything else in the sidebar follows this selection.",
-    accent: "bg-violet-50",
-    accentText: "text-violet-500",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.7}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-        />
-      </svg>
-    ),
+    target: "opco-picker",
+    side: "bottom" as const,
+    title: "Select your OPCO",
+    body: "Every piece of content belongs to an OPCO (operating company). Use this picker to switch the active OPCO — all pages, messages and translation data shown in the sidebar will update accordingly.",
+  },
+  {
+    target: "partner-picker",
+    side: "bottom" as const,
+    title: "Select a Partner",
+    body: "Within an OPCO you can focus on a specific partner. Partner-specific entries (pages, messages, email templates) are scoped to this selection. Change it at any time from the header.",
+  },
+  {
+    target: "edit-mode",
+    side: "bottom" as const,
+    title: "View-only vs Editing mode",
+    body: "By default the tool is read-only so you can explore without risk. Click \u201cView only\u201d to switch to Editing mode — inline cell editors, CSV import and publish actions all become available.",
   },
   {
     target: "translations-section",
-    side: "right",
+    side: "right" as const,
     title: "Translate & edit inline",
-    body: "The Translations section shows every localizable field as a table — one row per field, one column per locale. Click any cell to edit directly, then press ⌘ Enter to save. Amber cells flag missing values.",
-    accent: "bg-indigo-50",
-    accentText: "text-indigo-500",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.7}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-        />
-      </svg>
-    ),
+    body: "The Translations section shows every localizable field as a table — one row per field, one column per locale. In Editing mode, click any cell to edit directly and press ⌘ Enter to save. Amber cells flag missing values.",
   },
   {
     target: "nav-unpublished",
-    side: "right",
+    side: "right" as const,
     title: "Review unpublished changes",
-    body: "Every entry with a draft that differs from live appears here. Click Changes on any row to see a field-level diff, then publish individually or in bulk.",
-    accent: "bg-amber-50",
-    accentText: "text-amber-500",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.7}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-        />
-      </svg>
-    ),
+    body: "Every entry whose draft differs from what is live in Contentful appears here. Click \u201cChanges\u201d on any row for a field-level diff. Publish entries individually with the button on the row, or select multiple and bulk-publish.",
   },
   {
     target: "nav-sitemap",
-    side: "right",
+    side: "right" as const,
     title: "Browse the page hierarchy",
-    body: "The Sitemap renders the full page tree. Green = published and up to date, amber = unpublished draft changes, grey = not yet published. Click any row to open the full entry detail.",
-    accent: "bg-sky-50",
-    accentText: "text-sky-500",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.7}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-        />
-      </svg>
-    ),
+    body: "The Sitemap renders the full page tree for the selected OPCO. Status dots show at a glance: green = published and current, amber = unpublished draft changes, grey = never published. Click any row to open the entry.",
+  },
+  {
+    target: "opco-section",
+    side: "right" as const,
+    title: "Direct entry access",
+    body: "Expand the OPCO and Partner rows here to jump straight to their root Contentful entries — pages, messages, emails and any custom reference groups. No need to search in Contentful.",
   },
   {
     target: "take-tour",
-    side: "top",
-    title: "You're all set",
-    body: "That covers the essentials. You can reopen this tour any time with the Take tour button at the bottom of the sidebar.",
-    accent: "bg-emerald-50",
-    accentText: "text-emerald-500",
-    icon: (
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.7}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-      </svg>
-    ),
+    side: "top" as const,
+    title: "You’re all set ✓",
+    body: "That covers the essentials. You can reopen this tour any time from the \u201cTake tour\u201d button at the bottom of the sidebar. Happy publishing!",
   },
 ];
 
@@ -180,6 +185,15 @@ export function OnboardingTour({ open, onClose }: Props) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  // Inject CSS overrides once on mount, remove on unmount
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.id = "driver-override";
+    style.textContent = TOUR_CSS;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+
   useEffect(() => {
     if (!open) {
       driverRef.current?.destroy();
@@ -194,7 +208,7 @@ export function OnboardingTour({ open, onClose }: Props) {
       nextBtnText: "Next →",
       prevBtnText: "← Back",
       doneBtnText: "Get started ✓",
-      overlayOpacity: 0.55,
+      overlayOpacity: 0.5,
       smoothScroll: true,
       allowClose: true,
       steps: STEPS.map((step) => ({
@@ -223,3 +237,4 @@ export function OnboardingTour({ open, onClose }: Props) {
 
   return null;
 }
+
