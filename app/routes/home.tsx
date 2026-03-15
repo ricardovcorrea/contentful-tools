@@ -797,9 +797,6 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   const [showFullLoading, setShowFullLoading] = useState(false);
   const [isInactive, setIsInactive] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
-  // Records when the loading overlay was last shown, so we can enforce a
-  // minimum visible duration even when all data comes from cache.
-  const loadingShownAt = useRef<number>(0);
   const { disableEditMode } = useEditMode();
 
   useEffect(() => {
@@ -823,22 +820,16 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   // events so the LoadingScreen is mounted and ready to receive them.
   useEffect(() => {
     const handler = () => {
-      loadingShownAt.current = Date.now();
       setShowFullLoading(true);
     };
     window.addEventListener(NAV_LOADING_EVENT, handler);
     return () => window.removeEventListener(NAV_LOADING_EVENT, handler);
   }, []);
 
-  // Hide full loading screen once navigation finishes, but never sooner than
-  // MIN_LOADING_MS after it appeared — so cached-data reloads are still visible.
-  const MIN_LOADING_MS = 2000;
+  // Hide full loading screen once navigation finishes.
   useEffect(() => {
     if (!isLoading && showFullLoading) {
-      const elapsed = Date.now() - loadingShownAt.current;
-      const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-      const timer = setTimeout(() => setShowFullLoading(false), remaining);
-      return () => clearTimeout(timer);
+      setShowFullLoading(false);
     }
   }, [isLoading, showFullLoading]);
 
@@ -863,7 +854,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
   //   Stage 1 — after INACTIVE_AFTER_MS of no input → show "Inactive" badge in footer
   //   Stage 2 — after a further (LOGOUT_AFTER_MS − INACTIVE_AFTER_MS) → force logout
   const INACTIVE_AFTER_MS = 15_000; // 15 seconds → show footer badge
-  const LOGOUT_AFTER_MS = 10 * 60 * 1000; // 10 minutes total → logout
+  const LOGOUT_AFTER_MS = 5 * 60 * 1000; // 5 minutes total → logout
 
   // Keep a stable ref to navigate so the effect never needs to re-run on
   // route changes (which would reset the idle timer on every navigation).
