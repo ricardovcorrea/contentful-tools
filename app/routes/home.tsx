@@ -67,10 +67,6 @@ export function meta({}: Route.MetaArgs) {
  * For all other navigations (e.g. moving between sub-pages) skip the reload
  * since TanStack Query manages data freshness there.
  */
-/** True after the very first clientLoader run completes successfully. Used to
- *  skip the 3-second "Ready" pause on subsequent opco/partner revalidations. */
-let _hasLoadedOnce = false;
-
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
@@ -185,15 +181,18 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     return raw;
   };
 
+  const opcoIdFromUrl = safeStoredId(url.searchParams.get("opco"));
   let opcoId =
-    safeStoredId(url.searchParams.get("opco")) ??
+    opcoIdFromUrl ??
     safeStoredId(localStorage.getItem("selectedOpco")) ??
     defaultOpcoId;
 
-  // If the stored/URL opco ID is no longer in the list (e.g. was deleted),
+  // If the stored opco ID is no longer in the list (e.g. was deleted),
   // fall back to the first available OPCO.
+  // IMPORTANT: skip this fallback when the opco came from the URL — it may
+  // point to a newly created OPCO not yet indexed by Contentful.
   const availableOpcoIds = opcos.items.map((o: any) => getOpcoFieldId(o));
-  if (opcoId && !availableOpcoIds.includes(opcoId)) {
+  if (!opcoIdFromUrl && opcoId && !availableOpcoIds.includes(opcoId)) {
     opcoId = availableOpcoIds[0] ?? opcoId;
   }
 
@@ -311,17 +310,23 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     opcoPartners.items[0]?.fields["id"],
     firstLocale,
   );
+  const partnerIdFromUrl = safeStoredId(url.searchParams.get("partner"));
   let partnerId =
-    safeStoredId(url.searchParams.get("partner")) ??
+    partnerIdFromUrl ??
     safeStoredId(localStorage.getItem("selectedPartner")) ??
     firstPartnerId;
 
-  // If the stored/URL partner ID is no longer in the list (e.g. was deleted),
+  // If the stored partner ID is no longer in the list (e.g. was deleted),
   // fall back to the first available partner for this OPCO.
+  // IMPORTANT: skip this fallback when the partner came from the URL — the URL
+  // is the most authoritative source and may point to a newly created partner
+  // that Contentful hasn't fully indexed yet. Clobbering it here would cause
+  // the wrong partner's data to be loaded.
   const availablePartnerIds = opcoPartners.items.map((p: any) =>
     resolveStringField(p.fields["id"], firstLocale),
   );
   if (
+    !partnerIdFromUrl &&
     partnerId &&
     availablePartnerIds.length > 0 &&
     !availablePartnerIds.includes(partnerId)
@@ -445,12 +450,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   dispatchLoadStep(5);
 
   // Mark all steps done.
-  // On the initial load we keep a 3-second pause so the user can read the
-  // step-by-step feedback. On opco/partner revalidations use a shorter pause
-  // so the steps are still visible before the overlay dismisses.
   dispatchLoadComplete();
-  await new Promise((r) => setTimeout(r, _hasLoadedOnce ? 1500 : 3000));
-  _hasLoadedOnce = true;
 
   // Seed TanStack Query cache so useEntry/useAsset hooks across all pages get
   // instant results without extra API calls for data we just loaded.

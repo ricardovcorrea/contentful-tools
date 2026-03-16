@@ -29,7 +29,16 @@ export default function SitemapPage() {
     resolveStringField(opcoEntry?.fields?.["title"], firstLocale) ||
     opcoId;
 
-  const partnerCount = opcoPartners.items.length;
+  const partnerEntry = opcoPartners.items.find(
+    (p: any) =>
+      (resolveStringField(p.fields["id"], firstLocale) || p.sys.id) ===
+      partnerId,
+  );
+  const partnerName: string =
+    (partnerEntry
+      ? resolveStringField(partnerEntry.fields["internalName"], firstLocale) ||
+        resolveStringField(partnerEntry.fields["title"], firstLocale)
+      : null) ?? partnerId;
 
   const { editMode } = useEditMode();
   const [search, setSearch] = useState("");
@@ -47,15 +56,15 @@ export default function SitemapPage() {
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="min-w-0">
             <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
-              {opcoId}
-              {partnerId ? ` · ${partnerId}` : ""}
+              {opcoName}
+              {partnerId ? ` · ${partnerName}` : ""}
             </p>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               Sitemap
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Pages across <span className="font-semibold">{opcoName}</span> and{" "}
-              {partnerCount} partner{partnerCount !== 1 ? "s" : ""}
+              Page inclusion status across the selected OPCO and partner
+              configuration
             </p>
           </div>
           {totalCount > 0 && (

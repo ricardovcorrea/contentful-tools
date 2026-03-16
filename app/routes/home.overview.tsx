@@ -34,6 +34,7 @@ import {
 } from "~/lib/csv";
 
 type ParentLoaderData = {
+  opcos: { items: any[] };
   opcoId: string;
   opcoPartners: { items: any[] };
   partnerId: string;
@@ -1132,6 +1133,7 @@ export default function OverviewPage() {
 
   const {
     locales,
+    opcos,
     opcoPartners,
     opcoPages,
     opcoMessages,
@@ -1154,6 +1156,26 @@ export default function OverviewPage() {
   const opcoLocaleCodes = locales.items.map((l) => l.code);
   const localeCodes = [EN_GB, ...opcoLocaleCodes.filter((l) => l !== EN_GB)];
   const firstLocale = EN_GB;
+
+  const getName = (fields: Record<string, any>) =>
+    resolveStringField(fields["internalName"], firstLocale) ||
+    resolveStringField(fields["title"], firstLocale) ||
+    null;
+
+  const selectedOpcoEntry = opcos.items.find(
+    (o: any) =>
+      (resolveStringField(o.fields["id"], firstLocale) || o.sys.id) === opcoId,
+  );
+  const selectedPartnerEntry = opcoPartners.items.find(
+    (p: any) =>
+      (resolveStringField(p.fields["id"], firstLocale) || p.sys.id) ===
+      partnerId,
+  );
+  const opcoDisplayName =
+    (selectedOpcoEntry ? getName(selectedOpcoEntry.fields) : null) ?? opcoId;
+  const partnerDisplayName =
+    (selectedPartnerEntry ? getName(selectedPartnerEntry.fields) : null) ??
+    partnerId;
   // Locales to consider for missing-translation detection:
   // Only OPCO-explicitly-configured locales, excluding en-GB (it is the source,
   // never a translation target — unless the OPCO has explicitly listed it AND it
@@ -1885,13 +1907,6 @@ export default function OverviewPage() {
       ? partnerGroups.reduce((acc, g) => acc + g.items.length, 0)
       : 0);
 
-  const scopeLabel = isOpco
-    ? `OPCO — ${opcoId} · Partner — ${partnerId}`
-    : `Partner — ${partnerId}`;
-  const pageTitle = activeGroupLabel
-    ? `${isOpco ? "OPCO" : "Partner"} — ${activeGroupLabel}`
-    : `${isOpco ? "OPCO" : "Partner"} — Translation Overview`;
-
   return (
     <main className="flex-1 overflow-y-auto bg-gray-50">
       <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 pt-6 sm:px-8">
@@ -1928,11 +1943,12 @@ export default function OverviewPage() {
               {isOpco ? "OPCO" : "Partner"} · Translation Overview
             </p>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-              {pageTitle.replace(/^(OPCO|Partner) — /, "")}
+              {isOpco ? opcoDisplayName : partnerDisplayName}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              {scopeLabel} · {totalEntries} entries · {localeCodes.length}{" "}
-              locales · only localizable fields shown
+              {isOpco
+                ? `OPCO & partner translations · ${totalEntries} entries · ${localeCodes.length} locales · only localizable fields shown`
+                : `Partner translations · ${totalEntries} entries · ${localeCodes.length} locales · only localizable fields shown`}
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
@@ -2085,7 +2101,7 @@ export default function OverviewPage() {
               >
                 <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
                 <span className="text-sm font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
-                  OPCO — {opcoId}
+                  OPCO — {opcoDisplayName}
                 </span>
                 <span className="text-xs text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
                   {opcoGroups.reduce((a, g) => a + g.items.length, 0)}
@@ -2142,7 +2158,7 @@ export default function OverviewPage() {
                     >
                       <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                       <span className="text-sm font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">
-                        Partner — {partnerId}
+                        Partner — {partnerDisplayName}
                       </span>
                       <span className="text-xs text-gray-500 tabular-nums font-medium bg-gray-200/80 px-1.5 py-0.5 rounded-full ml-auto shrink-0">
                         {partnerGroups.reduce((a, g) => a + g.items.length, 0)}

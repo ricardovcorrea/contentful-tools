@@ -125,9 +125,9 @@ export function clearCache(): void {
   } catch {
     /* ignore */
   }
-  // Clear the TanStack Query in-memory cache.
-  import("~/lib/query-client").then(({ queryClient }) => queryClient.clear());
-  // Leave in-flight requests running — they'll repopulate the fresh store.
+  // NOTE: TanStack Query in-memory cache is NOT cleared here to avoid a race
+  // condition (this function is synchronous; callers that need queryClient
+  // cleared should do so explicitly before invoking callbacks).
 }
 
 /** Remove a single cache entry by key from both memory and localStorage. */

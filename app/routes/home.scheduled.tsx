@@ -9,6 +9,13 @@ import {
   type ScheduledAction as ScheduledActionType,
 } from "~/lib/contentful/get-scheduled-actions";
 
+// ── shouldRevalidate — always re-run the loader on every visit ─────────────
+
+export function shouldRevalidate() {
+  // Always re-fetch so the scheduled actions list is never served from cache.
+  return true;
+}
+
 // ── clientLoader — always fetches fresh, bypasses cache entirely ─────────────
 
 export async function clientLoader(): Promise<{

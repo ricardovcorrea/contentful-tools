@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import React from "react";
 import { queryClient } from "~/lib/query-client";
-import { getCacheLastUpdated } from "~/lib/contentful/cache";
+import { clearCache, getCacheLastUpdated } from "~/lib/contentful/cache";
 import { formatCacheTime } from "~/lib/format";
 import type { Query } from "@tanstack/react-query";
 
@@ -391,6 +391,11 @@ export function CacheInspectorModal({ open, onClose }: Props) {
   );
 
   const handleClearAll = useCallback(() => {
+    // clearCache() wipes the custom in-memory store, all cf_cache:* localStorage
+    // entries, AND the rq-cache key used by persistQueryClient. Without removing
+    // rq-cache, the TanStack Query persisted cache is restored on reload and all
+    // requests appear instant — giving the illusion that cache wasn't cleared.
+    clearCache();
     queryClient.clear();
     // Full page reload so the app re-fetches all data from Contentful.
     window.location.reload();

@@ -48,8 +48,7 @@ export default function LocalesPage() {
               Locales
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              {allItems.length} locale{allItems.length !== 1 ? "s" : ""}{" "}
-              configured in this environment
+              Language and region settings available for content translation
             </p>
           </div>
           {allItems.length > 0 && (

@@ -39,6 +39,13 @@ type UnpublishedItem = {
   status: "draft" | "changed";
 };
 
+// ── shouldRevalidate — always re-run the loader on every visit ─────────────
+
+export function shouldRevalidate() {
+  // Always re-fetch so the unpublished list is never served from cache.
+  return true;
+}
+
 // ── clientLoader — always fetches fresh, bypasses cache entirely ─────────────
 
 export async function clientLoader(): Promise<LoaderData> {

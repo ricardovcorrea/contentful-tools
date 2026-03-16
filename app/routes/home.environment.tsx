@@ -1056,7 +1056,11 @@ export default function EnvironmentOverview() {
           <h1 className="text-2xl font-bold text-gray-900 leading-tight">
             {environmentName}
           </h1>
-          <p className="text-sm text-gray-500 mt-1">{environmentId}</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {environmentId !== environmentName
+              ? environmentId
+              : "Content entries, statistics and scheduled actions for this environment"}
+          </p>
         </div>
         <a
           href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}`}

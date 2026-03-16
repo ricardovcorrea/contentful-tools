@@ -292,6 +292,10 @@ export function AppHeader({
           setCreateNewOpen(false);
           setCreateNewInitialType(undefined);
           clearCache();
+          // Synchronously wipe the TanStack Query cache so the loader always
+          // fetches fresh data for the newly created OPCO/partner (clearCache
+          // only clears the custom cache layer, not the query client).
+          queryClient.clear();
           if (result.type === "opco") {
             onOpcoChange(result.id);
           } else if (result.type === "partner") {
