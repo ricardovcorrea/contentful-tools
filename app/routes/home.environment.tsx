@@ -1046,112 +1046,126 @@ export default function EnvironmentOverview() {
     partnerRefGroups.some((g) => isLocalizable(g.items));
 
   return (
-    <main className="flex-1 overflow-y-auto p-6 sm:p-8 bg-gray-50">
-      {/* Header */}
-      <div className="mb-6 flex items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
-            Environment
-          </p>
-          <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-            {environmentName}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {environmentId !== environmentName
-              ? environmentId
-              : "Content entries, statistics and scheduled actions for this environment"}
-          </p>
+    <main className="flex-1 overflow-y-auto bg-gray-50">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 sm:px-8 pt-6">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-4 pb-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
+              Environment
+            </p>
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+              {environmentName}
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {environmentId !== environmentName
+                ? environmentId
+                : "Content entries, statistics and scheduled actions for this environment"}
+            </p>
+          </div>
+          {envStats.totalEntries !== null && (
+            <span className="shrink-0 text-sm font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 border border-sky-200/60 tabular-nums mt-1">
+              {envStats.totalEntries}
+            </span>
+          )}
         </div>
-        <a
-          href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
-        >
-          <svg
-            className="w-3 h-3 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+
+        {/* Toolbar row */}
+        <div className="flex items-center gap-2 flex-wrap pb-3">
+          <a
+            href={`https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-[10px] font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            <svg
+              className="w-3 h-3 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
+            </svg>
+            Open in Contentful
+          </a>
+        </div>
+      </div>
+
+      <div className="px-6 sm:px-8 py-6">
+        {/* Row 1: environment stats (full width) */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mb-5">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50/60">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+              Environment Stats
+            </p>
+          </div>
+          <div className="px-4 py-4 grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+            <Tile
+              label="Entries"
+              value={envStats.totalEntries}
+              accent="bg-white border-gray-200 text-gray-900"
             />
-          </svg>
-          Open in Contentful
-        </a>
-      </div>
-
-      {/* Row 1: environment stats (full width) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mb-5">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50/60">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-            Environment Stats
-          </p>
+            <Tile
+              label="Content Types"
+              value={envStats.totalContentTypes}
+              accent="bg-white border-gray-200 text-gray-900"
+            />
+            <Tile
+              label="Assets"
+              value={envStats.totalAssets}
+              accent="bg-white border-gray-200 text-gray-900"
+            />
+            <Tile
+              label="Locales"
+              value={allLocales.items.length}
+              accent="bg-sky-500/5 border-sky-200/60 text-sky-900"
+            />
+            <Tile
+              label="Partners"
+              value={opcoPartners.items.length}
+              accent="bg-emerald-500/5 border-emerald-200/60 text-emerald-900"
+            />
+          </div>
         </div>
-        <div className="px-4 py-4 grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-          <Tile
-            label="Entries"
-            value={envStats.totalEntries}
-            accent="bg-white border-gray-200 text-gray-900"
+
+        {/* Row 2: translation coverage + content freshness */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+          <TranslationCoverageCard
+            entryCount={allEntries.length}
+            combinedStats={combinedStats}
+            locales={locales.items}
+            localeCount={locales.items.length}
+            onViewOpco={
+              opcoHasLocalizable ? () => navigate("/overview/opco") : undefined
+            }
+            onViewPartner={
+              partnerHasLocalizable
+                ? () => navigate("/overview/partner")
+                : undefined
+            }
+            opcoHasLocalizable={opcoHasLocalizable}
+            partnerHasLocalizable={partnerHasLocalizable}
+            opcoName={opcoName}
+            partnerName={partnerName}
           />
-          <Tile
-            label="Content Types"
-            value={envStats.totalContentTypes}
-            accent="bg-white border-gray-200 text-gray-900"
-          />
-          <Tile
-            label="Assets"
-            value={envStats.totalAssets}
-            accent="bg-white border-gray-200 text-gray-900"
-          />
-          <Tile
-            label="Locales"
-            value={allLocales.items.length}
-            accent="bg-sky-500/5 border-sky-200/60 text-sky-900"
-          />
-          <Tile
-            label="Partners"
-            value={opcoPartners.items.length}
-            accent="bg-emerald-500/5 border-emerald-200/60 text-emerald-900"
+          <ContentFreshnessCard
+            entries={allEntries}
+            opcoName={opcoName}
+            partnerName={partnerName}
           />
         </div>
-      </div>
 
-      {/* Row 2: translation coverage + content freshness */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
-        <TranslationCoverageCard
-          entryCount={allEntries.length}
-          combinedStats={combinedStats}
-          locales={locales.items}
-          localeCount={locales.items.length}
-          onViewOpco={
-            opcoHasLocalizable ? () => navigate("/overview/opco") : undefined
-          }
-          onViewPartner={
-            partnerHasLocalizable
-              ? () => navigate("/overview/partner")
-              : undefined
-          }
-          opcoHasLocalizable={opcoHasLocalizable}
-          partnerHasLocalizable={partnerHasLocalizable}
-          opcoName={opcoName}
-          partnerName={partnerName}
-        />
-        <ContentFreshnessCard
-          entries={allEntries}
-          opcoName={opcoName}
-          partnerName={partnerName}
-        />
-      </div>
-
-      {/* Row 3: unpublished + scheduled */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <UnpublishedCard opcoId={opcoId} partnerId={partnerId} />
-        <ScheduledCard actions={scheduledActions} />
+        {/* Row 3: unpublished + scheduled */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <UnpublishedCard opcoId={opcoId} partnerId={partnerId} />
+          <ScheduledCard actions={scheduledActions} />
+        </div>
       </div>
     </main>
   );

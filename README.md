@@ -47,44 +47,127 @@ Use the two dropdowns in the left sidebar. Selecting an OPCO loads all its partn
 
 ---
 
-## Views reference
+## Features & Roadmap
 
-### Overview
+### Authentication & Setup
+- ✅ 3-step sign-in modal (CMA token → space → environment)
+- ✅ Live token validation against the Contentful API
+- ✅ Credentials and environment persisted in `localStorage`
+- ✅ Environment switching from the header (no re-login)
+- ✅ Logout wipes token and all cached data
+- ✅ Guided onboarding tour for first-time users
+- ⬜ Role-based read/write permissions based on CMA token scopes
+- ⬜ Support for multiple saved CMA profiles (switch accounts)
 
-Shows a translation table for all translatable fields of the active partner, with one column per locale. Red or amber cells indicate missing or empty values.
+### Navigation & Scope
+- ✅ OPCO selector — top-level scope; switching reloads all data
+- ✅ Partner selector — scopes pages, messages, emails, references
+- ✅ URL-param driven scope (`?opco=` / `?partner=`) — shareable links
+- ✅ Create new OPCO or Partner directly from the UI
+- ✅ Global edit mode toggle (locks/unlocks all inline editing)
+- ⬜ Favourite / pinned OPCO+partner combinations
+- ⬜ Breadcrumb navigation for deep-linked entries
 
-- **Inline editing** — click any cell, edit the value, press `⌘ Enter` (macOS) or `Ctrl Enter` (Windows/Linux) to save directly to Contentful.
-- **Export CSV** — downloads a spreadsheet with one row per field and one column per locale.
-- **Import CSV** — upload an edited CSV. A colour-coded diff shows every changed value before committing. Deselect rows you want to skip, then click **Apply**.
+### Translations (Overview)
+- ✅ Translation table — one row per field, one column per locale
+- ✅ Grouped by content type (Pages, Messages, Emails, Ref groups)
+- ✅ Status-aware accordion headers (red = missing, green = complete)
+- ✅ Expand all / Collapse all groups
+- ✅ Inline cell editing — click to edit, `⌘ Enter` to save
+- ✅ Inline edit pill badge (always visible in edit mode)
+- ✅ Optimistic local updates after save
+- ✅ Export translations to CSV
+- ✅ Import CSV with visual diff review before committing
+- ✅ Deselect rows to skip specific fields during import
+- ✅ Animated progress modal during bulk apply
+- ✅ Entry-level diff viewer
+- ✅ Embedded Unpublished tab within the Overview page
+- ⬜ Translation memory / suggestions from existing values
+- ⬜ Locale completion percentage per entry group
+- ⬜ Lock individual cells to prevent accidental edits
+- ⬜ Comment / notes per field for translator context
 
-### Unpublished
-
-Lists every entry in the active scope where the draft version differs from the published version.
-
-- Click **Changes** to see a field-level diff (published vs. draft).
-- Select entries and click **Publish selected** to push all at once, or publish rows individually.
+### Publishing
+- ✅ Unpublished entries list (draft + changed states)
+- ✅ Filter by draft / changed; search by entry name
+- ✅ Bulk select and publish in parallel
+- ✅ Per-entry publish with loading / done / error states
+- ✅ Field-level diff modal (published vs. draft)
+- ✅ Retry-resilient publish (handles Contentful CDN race conditions)
+- ✅ Cache invalidation after publish
+- ⬜ Schedule a publish directly from the unpublished list
+- ⬜ Revert draft to last published version
 
 ### Sitemap
+- ✅ Expandable page hierarchy tree
+- ✅ Colour-coded publish status (green / amber / grey)
+- ✅ "Not in sitemap" section for orphaned entries
+- ✅ Navigate to entry detail from any row
+- ⬜ Drag-and-drop page reordering within the sitemap
+- ⬜ Export sitemap as XML or CSV
 
-Renders the full page hierarchy for the active OPCO or partner as an expandable tree.
-
-- **Green** — page is published and up to date
-- **Amber** — page has unpublished draft changes
-- **Grey** — page entry is not published
-
-Click any row to open the full entry detail view.
-
-### Scheduled
-
-Lists all publish and unpublish actions queued in Contentful for the current space and environment, grouped chronologically. Click an entry ID to open its detail view.
+### Scheduled Actions
+- ✅ Lists all queued publish / unpublish actions
+- ✅ Chronological grouping; filter by action type
+- ✅ Resolves entry names (not raw IDs) in the list
+- ✅ Cancel a scheduled action from the list
+- ✅ Always fetches fresh (bypasses cache)
+- ⬜ Create a new scheduled action from the UI
+- ⬜ Bulk cancel selected actions
 
 ### Assets
-
-Browse media assets (images, PDFs) linked to the current scope. Preview thumbnails and copy asset IDs or URLs.
+- ✅ Paginated asset browser (all media in the environment)
+- ✅ Image thumbnails inline; file metadata (name, type, size, dimensions)
+- ✅ Filter by images / documents; search by title or filename
+- ✅ Asset → entry reference map (shows which entries use each asset)
+- ✅ Copy asset ID or URL to clipboard
+- ⬜ Upload new assets directly from the browser
+- ⬜ Replace / update an existing asset file
+- ⬜ Detect unused assets (no entry references)
 
 ### Locales
+- ✅ Locale list — code, display name, fallback chain, default flag
+- ✅ Per-locale detail view showing entry coverage in scope
+- ✅ Direct link to Contentful locale settings
+- ⬜ Edit locale fallback chain from the UI
+- ⬜ Side-by-side locale comparison view
 
-Shows the locale configuration for the active environment — locale codes, names, fallback chains, and which locales are marked as default.
+### Entry Detail
+- ✅ Field viewer grouped by locale
+- ✅ Inline editing for strings, numbers, and booleans
+- ✅ Edit pill badge indicator for editable fields
+- ✅ Rich text rendering
+- ✅ Reference entry cards (expandable, with thumbnail if image)
+- ✅ Asset previews
+- ✅ Visual page editor (Craft.js drag-and-drop)
+- ✅ Component property editing per locale
+- ✅ Email template preview (iframe, locale selector)
+- ✅ "Open in Contentful" deep-link in the header
+- ⬜ Publish / unpublish directly from the entry detail header
+- ⬜ View entry changelog / revision history
+- ⬜ Rich text inline editing
+- ⬜ Save visual editor changes back to Contentful
+
+### Environment & Monitoring
+- ✅ Space stats (total entries, total assets, environment ID/name)
+- ✅ Deep-link to open the environment in Contentful
+- ⬜ Content type explorer (list all types and their fields)
+- ⬜ Webhook activity log viewer
+
+### Caching & Performance
+- ✅ TanStack Query with 24-hour stale time, persisted to `localStorage`
+- ✅ Custom Contentful response cache (`cf_cache:*` keys)
+- ✅ Cache inspector — view timestamps, invalidate per key or clear all
+- ✅ Selective route revalidation (only reloads when scope changes)
+- ⬜ Manual "force refresh" button per view
+- ⬜ Configurable cache TTL from the UI
+
+### Infrastructure & Deployment
+- ✅ Pure client-side SPA — no backend required
+- ✅ Deployable to any static host / CDN (Cloudflare Pages, Vercel, S3+CloudFront, etc.)
+- ✅ Health-check endpoint at `/.well-known`
+- ⬜ CI/CD pipeline example (GitHub Actions)
+- ⬜ Multi-space support (connect to more than one Contentful space)
 
 ---
 
@@ -126,135 +209,13 @@ Your CMA token is stored exclusively in `localStorage` in your browser. All API 
 
 ---
 
-## Running with Docker
-
-### Available npm scripts
+## Development
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Start the Vite dev server with hot reload at `http://localhost:5173` |
-| `npm start` | Build the Docker image and run it at `http://localhost:3000` |
-| `npm run docker:build` | Build the Docker image (`avios-content-tools`) without running it |
-| `npm run docker:run` | Run an already-built image at port 3000 |
-| `npm run docker:stop` | Stop the running container |
+| `npm run build` | Build the SPA to `build/client/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run typecheck` | Run TypeScript type checking |
 
-### Build and run locally (production mode)
-
-```bash
-# One command — builds the image then starts the container:
-npm start
-
-# Or step by step:
-npm run docker:build
-npm run docker:run
-```
-
-### Using Docker Compose
-
-```bash
-# Build and start:
-docker compose up --build
-
-# Start without rebuilding:
-docker compose up
-
-# Stop and remove the container:
-docker compose down
-```
-
-The app is available at `http://localhost:3000`.
-
----
-
-## Deploying to a hosting provider
-
-The app ships as a self-contained Docker image with no external runtime dependencies. Any Docker-capable host works.
-
-### Fly.io
-
-1. [Install the Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) and log in:
-   ```bash
-   fly auth login
-   ```
-2. Initialise the app (run once):
-   ```bash
-   fly launch --name avios-content-tools --no-deploy
-   ```
-   When prompted, decline adding a database. Accept the generated `fly.toml`.
-3. Deploy:
-   ```bash
-   fly deploy
-   ```
-4. Open the live URL:
-   ```bash
-   fly open
-   ```
-
-> **Tip:** The generated `fly.toml` will pick up `EXPOSE 3000` automatically. If it defaults to port 8080, set `internal_port = 3000` in the `[[services.ports]]` section.
-
----
-
-### Railway
-
-1. Push this repo to GitHub.
-2. Go to [railway.app](https://railway.app) → **New project** → **Deploy from GitHub repo** → select this repo.
-3. Railway auto-detects the `Dockerfile`. Click **Deploy**.
-4. Under **Settings → Networking**, expose port `3000`.
-
-No configuration files are required.
-
----
-
-### Render
-
-1. Push this repo to GitHub.
-2. Go to [render.com](https://render.com) → **New** → **Web Service** → connect the repo.
-3. Set **Environment** to `Docker`.
-4. Set **Port** to `3000`.
-5. Click **Create Web Service**.
-
-Render will detect the `Dockerfile` and build it on every push to `main`.
-
----
-
-### Other Docker hosts (VPS, DigitalOcean App Platform, AWS ECS, etc.)
-
-Build and push to a registry, then run with `docker run -p 80:3000 <image>`:
-
-```bash
-# Tag and push to Docker Hub (replace <user> with your Docker Hub username):
-docker build -t <user>/avios-content-tools .
-docker push <user>/avios-content-tools
-
-# Pull and run on the server:
-docker run -d --restart unless-stopped -p 80:3000 <user>/avios-content-tools
-```
-
----
-
-## Project structure
-
-```
-app/
-  components/
-    layout/       # AppHeader, AppSidebar, AppFooter, CacheInspectorModal
-    overview/     # GroupTable, CellValue, UnpublishedList, modals
-    ui/           # FancyPicker, EnvPicker, LogoAvatar (reusable primitives)
-  lib/
-    contentful/   # API calls (get-opcos, get-locales, sitemap, cache, etc.)
-    csv.ts        # CSV parse/serialize helpers
-    format.ts     # Display formatting utilities
-  routes/
-    login.tsx         # Landing page + login modal
-    home.tsx          # Root layout and data loader
-    home.overview.tsx # Translations and unpublished tabs
-    home.sitemap.tsx  # Visual sitemap view
-    home.scheduled.tsx# Scheduled actions view
-    home.entry.tsx    # Single-entry detail view
-  types/
-    contentful.ts # Shared TypeScript types
-```
-
----
-
-Built with React Router · Contentful Management API · Tailwind CSS
+Deploy the contents of `build/client/` to any static host or CDN. Ensure the host is configured to serve `index.html` for all routes (SPA fallback).

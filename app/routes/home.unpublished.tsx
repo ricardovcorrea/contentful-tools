@@ -22,6 +22,8 @@ type ContextData = {
   locales: { items: { code: string; name: string; default?: boolean }[] };
   spaceId: string;
   environmentId: string;
+  opcos: { items: any[] };
+  opcoPartners: { items: any[] };
 };
 
 type LoaderData = {
@@ -217,6 +219,27 @@ export default function UnpublishedPage() {
   const opcoId = ctx?.opcoId ?? "";
   const partnerId = ctx?.partnerId ?? "";
   const firstLocale = ctx?.locales.items[0]?.code ?? "en";
+
+  const getDisplayName = (fields: Record<string, any>) =>
+    resolveStringField(fields["internalName"], firstLocale) ||
+    resolveStringField(fields["title"], firstLocale) ||
+    null;
+  const selectedOpcoEntry = (ctx?.opcos?.items ?? []).find(
+    (o: any) =>
+      (resolveStringField(o.fields["id"], firstLocale) || o.sys.id) === opcoId,
+  );
+  const selectedPartnerEntry = (ctx?.opcoPartners?.items ?? []).find(
+    (p: any) =>
+      (resolveStringField(p.fields["id"], firstLocale) || p.sys.id) ===
+      partnerId,
+  );
+  const opcoDisplayName =
+    (selectedOpcoEntry ? getDisplayName(selectedOpcoEntry.fields) : null) ??
+    opcoId;
+  const partnerDisplayName =
+    (selectedPartnerEntry
+      ? getDisplayName(selectedPartnerEntry.fields)
+      : null) ?? partnerId;
 
   // Build list up-front so handlePublish callbacks close over it correctly.
   // (Uses nullish fallbacks so hookorder is preserved before the guard below.)
@@ -516,8 +539,8 @@ export default function UnpublishedPage() {
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="min-w-0">
             <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">
-              {opcoId}
-              {partnerId ? ` · ${partnerId}` : ""}
+              {opcoDisplayName}
+              {partnerId ? ` · ${partnerDisplayName}` : ""}
             </p>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               Unpublished Content

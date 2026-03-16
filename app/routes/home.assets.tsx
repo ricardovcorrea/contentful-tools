@@ -14,6 +14,8 @@ type ParentLoaderData = {
   firstLocale?: string;
   opcoId: string;
   partnerId: string;
+  opcos: { items: any[] };
+  opcoPartners: { items: any[] };
   opcoPages: { items: any[] };
   opcoMessages: { items: any[] };
   partnerPages: { items: any[] };
@@ -115,6 +117,8 @@ export default function AssetsPage() {
     envStats,
     opcoId,
     partnerId,
+    opcos,
+    opcoPartners,
     opcoPages,
     opcoMessages,
     partnerPages,
@@ -124,6 +128,26 @@ export default function AssetsPage() {
     partnerRefGroups,
   } = parentData ?? {};
   const firstLocale = parentData?.firstLocale ?? "en-GB";
+
+  const getName = (fields: Record<string, any>) =>
+    resolveStringField(fields["internalName"], firstLocale) ||
+    resolveStringField(fields["title"], firstLocale) ||
+    null;
+
+  const selectedOpcoEntry = (opcos?.items ?? []).find(
+    (o: any) =>
+      (resolveStringField(o.fields["id"], firstLocale) || o.sys.id) === opcoId,
+  );
+  const selectedPartnerEntry = (opcoPartners?.items ?? []).find(
+    (p: any) =>
+      (resolveStringField(p.fields["id"], firstLocale) || p.sys.id) ===
+      partnerId,
+  );
+  const opcoDisplayName =
+    (selectedOpcoEntry ? getName(selectedOpcoEntry.fields) : null) ?? opcoId;
+  const partnerDisplayName =
+    (selectedPartnerEntry ? getName(selectedPartnerEntry.fields) : null) ??
+    partnerId;
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
@@ -258,8 +282,8 @@ export default function AssetsPage() {
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="min-w-0">
             <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
-              {opcoId}
-              {partnerId ? ` · ${partnerId}` : ""}
+              {opcoDisplayName}
+              {partnerId ? ` · ${partnerDisplayName}` : ""}
             </p>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               Assets

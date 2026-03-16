@@ -43,6 +43,8 @@ type ContextData = {
   spaceId: string;
   environmentId: string;
   scheduledActions: ScheduledAction[];
+  opcos: { items: any[] };
+  opcoPartners: { items: any[] };
   // entry collections for name resolution
   opcoPages: { items: any[] };
   opcoMessages: { items: any[] };
@@ -137,16 +139,38 @@ export default function ScheduledPage() {
     locales,
     opcoId,
     partnerId,
+    opcos,
+    opcoPartners,
   } = ctx;
 
-  // Use fresh loader data for scheduled actions; fall back to parent loader
+  const firstLocale = locales.items[0]?.code ?? "en";
+
+  const getDisplayName = (fields: Record<string, any>) =>
+    resolveStringField(fields["internalName"], firstLocale) ||
+    resolveStringField(fields["title"], firstLocale) ||
+    null;
+
+  const selectedOpcoEntry = (opcos?.items ?? []).find(
+    (o: any) =>
+      (resolveStringField(o.fields["id"], firstLocale) || o.sys.id) === opcoId,
+  );
+  const selectedPartnerEntry = (opcoPartners?.items ?? []).find(
+    (p: any) =>
+      (resolveStringField(p.fields["id"], firstLocale) || p.sys.id) ===
+      partnerId,
+  );
+  const opcoDisplayName =
+    (selectedOpcoEntry ? getDisplayName(selectedOpcoEntry.fields) : null) ??
+    opcoId;
+  const partnerDisplayName =
+    (selectedPartnerEntry
+      ? getDisplayName(selectedPartnerEntry.fields)
+      : null) ?? partnerId;
   // snapshot only if the child loader hasn't resolved yet.
   const scheduledActions: ScheduledAction[] =
     loaderData?.scheduledActions ?? ctx.scheduledActions;
 
-  const firstLocale = locales.items[0]?.code ?? "en";
-
-  // Build entry lookup map: entityId → { name, scope }
+  // Use fresh loader data for scheduled actions; fall back to parent loader
   const entryMap = new Map<
     string,
     { name: string; scope: "opco" | "partner" }
@@ -221,8 +245,8 @@ export default function ScheduledPage() {
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="min-w-0">
             <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
-              {opcoId}
-              {partnerId ? ` · ${partnerId}` : ""}
+              {opcoDisplayName}
+              {partnerId ? ` · ${partnerDisplayName}` : ""}
             </p>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               Scheduled Actions

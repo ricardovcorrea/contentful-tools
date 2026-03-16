@@ -351,12 +351,12 @@ export function SitemapSection({
         </section>
       )}
 
-      {/* ── Excluded section ── */}
+      {/* ── Not in sitemap section ── */}
       {showExcluded && excludedPages.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-              Excluded
+              Not in sitemap
             </span>
             <h2 className="text-sm font-bold text-gray-700">Pages</h2>
             <span className="text-[11px] font-semibold border px-1.5 py-0.5 rounded-full tabular-nums bg-gray-500/10 text-gray-500 border-gray-300/30">

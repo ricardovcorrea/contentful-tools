@@ -192,41 +192,78 @@ export function GroupTable({
   if (!loading && localizableFields && localizableFields.length === 0)
     return null;
 
+  const hasMissingTranslations =
+    !loading && localizableFields != null && entriesWithMissing > 0;
+  const allPresent =
+    !loading &&
+    localizableFields != null &&
+    entriesWithMissing === 0 &&
+    localizableFields.length > 0;
+  const accentBorder = hasMissingTranslations
+    ? "border-l-red-400"
+    : allPresent
+      ? "border-l-emerald-400"
+      : "border-l-gray-300";
+  const headerBg = hasMissingTranslations
+    ? "bg-red-50/30 hover:bg-red-50/60"
+    : allPresent
+      ? "bg-emerald-50/20 hover:bg-emerald-50/50"
+      : "bg-gray-50/40 hover:bg-gray-100/50";
+  const countBadge = hasMissingTranslations
+    ? "bg-red-100 text-red-600"
+    : allPresent
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-gray-200 text-gray-500";
+
   return (
-    <div className="mb-6">
+    <div
+      className={`mb-4 rounded-xl border border-gray-200 border-l-4 ${accentBorder} overflow-hidden shadow-sm`}
+    >
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 mb-3 text-left group/header rounded-lg py-1 px-1 -mx-1 hover:bg-gray-200/40 transition-colors"
+        className={`w-full flex items-center gap-3 text-left px-4 py-3 transition-colors ${headerBg}`}
       >
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-widest">
+        <h3 className="text-sm font-bold text-gray-700 tracking-wide">
           {group.label}
         </h3>
-        <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full tabular-nums">
+        <span
+          className={`text-xs px-2 py-0.5 rounded-full tabular-nums font-semibold ${countBadge}`}
+        >
           {group.items.length}
         </span>
         {loading && (
           <span
-            className="text-xs text-gray-600 italic"
+            className="text-xs text-gray-400 italic"
             style={{ animation: "skeleton-shimmer 1.4s ease-in-out infinite" }}
           >
             Loading fields…
           </span>
         )}
-        {!loading && localizableFields && entriesWithMissing > 0 && (
-          <span className="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">
+        {hasMissingTranslations && (
+          <span className="text-xs font-semibold bg-red-100 text-red-500 border border-red-200 px-2 py-0.5 rounded-full">
             {entriesWithMissing} with missing translations
           </span>
         )}
-        {!loading &&
-          localizableFields &&
-          entriesWithMissing === 0 &&
-          localizableFields.length > 0 && (
-            <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-              All translations present
-            </span>
-          )}
+        {allPresent && (
+          <span className="flex items-center gap-1 text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-full">
+            <svg
+              className="w-3 h-3 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            Complete
+          </span>
+        )}
         <svg
-          className={`ml-auto w-4 h-4 text-gray-500 transition-transform duration-200 shrink-0 ${expanded ? "" : "-rotate-90"}`}
+          className={`ml-auto w-4 h-4 text-gray-400 transition-transform duration-200 shrink-0 ${expanded ? "rotate-180" : ""}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -241,7 +278,7 @@ export function GroupTable({
       </button>
 
       {expanded && (
-        <div className="rounded-xl border border-gray-300 overflow-hidden mb-2">
+        <div className="border-t border-gray-200">
           {loading || !localizableFields ? (
             <div
               className="p-4 space-y-2"
@@ -515,19 +552,22 @@ export function GroupTable({
                                         : "Missing translation"}
                                     </span>
                                     {editMode && (
-                                      <svg
-                                        className="w-3.5 h-3.5 shrink-0 text-red-400 group-hover/cell:text-blue-400 transition-colors"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                        />
-                                      </svg>
+                                      <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-red-300 bg-red-50 text-red-400 group-hover/cell:border-blue-300 group-hover/cell:bg-blue-50 group-hover/cell:text-blue-500 transition-colors text-[9px] font-semibold leading-none">
+                                        <svg
+                                          className="w-2.5 h-2.5 shrink-0"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          stroke="currentColor"
+                                          strokeWidth={2.5}
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                          />
+                                        </svg>
+                                        Edit
+                                      </span>
                                     )}
                                   </span>
                                 ) : (
@@ -538,19 +578,22 @@ export function GroupTable({
                                       fieldId={fieldId}
                                     />
                                     {editMode && (
-                                      <svg
-                                        className="w-3 h-3 shrink-0 text-gray-300 group-hover/cell:text-blue-400 transition-colors"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                        />
-                                      </svg>
+                                      <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-gray-200 bg-white text-gray-400 group-hover/cell:border-blue-300 group-hover/cell:bg-blue-50 group-hover/cell:text-blue-500 transition-colors text-[9px] font-semibold leading-none">
+                                        <svg
+                                          className="w-2.5 h-2.5 shrink-0"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          stroke="currentColor"
+                                          strokeWidth={2.5}
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                          />
+                                        </svg>
+                                        Edit
+                                      </span>
                                     )}
                                   </span>
                                 )}

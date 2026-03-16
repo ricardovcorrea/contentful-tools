@@ -91,7 +91,7 @@ export default function SitemapPage() {
                   ? `All (${totalCount})`
                   : f === "included"
                     ? `In sitemap (${counts.included})`
-                    : `Excluded (${counts.excluded})`}
+                    : `Not in sitemap (${counts.excluded})`}
               </button>
             ))}
           </div>

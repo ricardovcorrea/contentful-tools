@@ -808,26 +808,48 @@ function EditableCell({
           setDraftValue(String(effectiveValue ?? ""));
         }
       }}
-      className={`group -mx-1 -my-0.5 px-1 py-0.5 rounded transition-colors min-h-6 ${
+      className={`group flex items-start justify-between gap-2 -mx-1 -my-0.5 px-1 py-0.5 rounded transition-colors min-h-6 ${
         editMode
           ? "cursor-text hover:bg-blue-50 hover:ring-1 hover:ring-blue-200"
           : "cursor-default"
       }`}
     >
-      {effectiveValue === null ||
-      effectiveValue === undefined ||
-      effectiveValue === "" ? (
-        <span
-          className={`italic text-sm ${
-            editMode
-              ? "text-gray-300 group-hover:text-blue-400"
-              : "text-gray-300"
-          }`}
-        >
-          {editMode ? "\u2014 click to edit \u2014" : "\u2014 empty \u2014"}
+      <span className="flex-1 min-w-0">
+        {effectiveValue === null ||
+        effectiveValue === undefined ||
+        effectiveValue === "" ? (
+          <span
+            className={`italic text-sm ${
+              editMode
+                ? "text-gray-300 group-hover:text-blue-400"
+                : "text-gray-300"
+            }`}
+          >
+            {editMode ? "\u2014 click to edit \u2014" : "\u2014 empty \u2014"}
+          </span>
+        ) : (
+          <span className="text-gray-700 text-sm">
+            {String(effectiveValue)}
+          </span>
+        )}
+      </span>
+      {editMode && (
+        <span className="shrink-0 mt-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-gray-200 bg-white text-gray-400 group-hover:border-blue-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors text-[9px] font-semibold leading-none">
+          <svg
+            className="w-2.5 h-2.5 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+            />
+          </svg>
+          Edit
         </span>
-      ) : (
-        <span className="text-gray-700">{String(effectiveValue)}</span>
       )}
     </div>
   );
@@ -932,108 +954,83 @@ export default function EntryDetail() {
   }
 
   return (
-    <main className="flex-1 overflow-y-auto p-6 sm:p-8 bg-gray-50">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
-            {entry.type}
-          </p>
-          <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-            {entry.label}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1 font-mono">{entry.id}</p>
+    <main className="flex-1 overflow-y-auto bg-gray-50">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 sm:px-8 pt-6">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-4 pb-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
+              {entry.type}
+            </p>
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+              {entry.label}
+            </h1>
+            <p className="text-sm text-gray-400 mt-1 font-mono">{entry.id}</p>
+          </div>
         </div>
-        <a
-          href={`https://app.contentful.com/spaces/${parentData.spaceId}/environments/${parentData.environmentId}/entries/${entry.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors shrink-0"
-        >
-          <svg
-            className="w-3.5 h-3.5 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-            />
-          </svg>
-          Open in Contentful
-        </a>
-      </div>
 
-      {/* View tabs */}
-      {(entry.contentTypeId === "page" || entry.type === "Partner Email") && (
-        <div className="flex gap-1 border-b border-gray-300 mb-4">
-          <button
-            onClick={() => setViewTab("fields")}
-            className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
-              viewTab === "fields"
-                ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+        {/* Toolbar row */}
+        <div className="flex items-center gap-2 flex-wrap pb-3">
+          <a
+            href={`https://app.contentful.com/spaces/${parentData.spaceId}/environments/${parentData.environmentId}/entries/${entry.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-[10px] font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
           >
-            Fields
-          </button>
-          {entry.contentTypeId === "page" && (
+            <svg
+              className="w-3 h-3 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
+            </svg>
+            Open in Contentful
+          </a>
+        </div>
+
+        {/* View tabs */}
+        {(entry.contentTypeId === "page" || entry.type === "Partner Email") && (
+          <div className="flex items-end gap-0 -mb-px">
             <button
-              onClick={() => setViewTab("editor")}
-              className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
-                viewTab === "editor"
-                  ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
-                  : "text-gray-500 hover:text-gray-700"
+              onClick={() => setViewTab("fields")}
+              className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+                viewTab === "fields"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              Visual Editor
+              Fields
             </button>
-          )}
-          {entry.type === "Partner Email" && (
-            <button
-              onClick={() => setViewTab("preview")}
-              className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-1.5 ${
-                viewTab === "preview"
-                  ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
+            {entry.contentTypeId === "page" && (
+              <button
+                onClick={() => setViewTab("editor")}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+                  viewTab === "editor"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              Email Preview
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Editor / Preview views */}
-      {viewTab === "editor" && entry.contentTypeId === "page" ? (
-        <div style={{ height: "calc(100vh - 220px)" }}>
-          <PageEditorTab entryId={entry.id} locale={firstLocale} />
-        </div>
-      ) : viewTab === "preview" && entry.type === "Partner Email" ? (
-        (() => {
-          const opcoKey = parentData.opcoId.toLowerCase();
-          const programme = OPCO_PROGRAMME_MAP[opcoKey];
-          if (!programme) {
-            return (
-              <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4">
+                Visual Editor
+              </button>
+            )}
+            {entry.type === "Partner Email" && (
+              <button
+                onClick={() => setViewTab("preview")}
+                className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+                  viewTab === "preview"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
                 <svg
-                  className="w-5 h-5 shrink-0 mt-0.5 text-amber-600"
+                  className="w-3.5 h-3.5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1042,68 +1039,31 @@ export default function EntryDetail() {
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                   />
                 </svg>
-                <div>
-                  <p className="text-sm font-bold text-amber-800">
-                    Unknown OPCO programme code for &ldquo;{opcoKey}&rdquo;
-                  </p>
-                  <p className="mt-1 text-xs text-amber-700 leading-relaxed">
-                    The email preview API requires a{" "}
-                    <code className="bg-amber-100 px-1 rounded">programme</code>{" "}
-                    query parameter, but{" "}
-                    <code className="bg-amber-100 px-1 rounded">{opcoKey}</code>{" "}
-                    is not in the OPCO → programme map. Add it to{" "}
-                    <code className="bg-amber-100 px-1 rounded">
-                      OPCO_PROGRAMME_MAP
-                    </code>{" "}
-                    in{" "}
-                    <code className="bg-amber-100 px-1 rounded">
-                      app/routes/home.entry.tsx
-                    </code>
-                    .
-                  </p>
-                  <p className="mt-2 text-[11px] text-amber-600 font-mono">
-                    Current map: {JSON.stringify(OPCO_PROGRAMME_MAP)}
-                  </p>
-                </div>
-              </div>
-            );
-          }
-          const templateValue =
-            resolveStringField(entry.fields["type"], previewLocale) ??
-            entry.contentTypeId;
-          const previewUrl = `https://stg.avios.com/spend-avios/vouchers/api/internal/email/template?template=${encodeURIComponent(templateValue)}&programme=${encodeURIComponent(programme)}&partner=${encodeURIComponent(parentData.partnerId.toLowerCase())}&locale=${encodeURIComponent(previewLocale)}&preview=true`;
-          return (
-            <div className="flex flex-col gap-3">
-              {/* Toolbar */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-xs text-gray-500 font-medium shrink-0">
-                  Locale:
-                </span>
-                <select
-                  value={previewLocale}
-                  onChange={(e) => setPreviewLocale(e.target.value)}
-                  className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {locales?.items.map((l) => (
-                    <option key={l.code} value={l.code}>
-                      {l.code}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[10px] font-mono text-gray-400 bg-gray-100 border border-gray-200 rounded px-2 py-1 flex-1 truncate hidden sm:block">
-                  {previewUrl}
-                </span>
-                <a
-                  href={previewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-auto shrink-0 flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
-                >
+                Email Preview
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="px-6 sm:px-8 py-6">
+        {/* Editor / Preview views */}
+        {viewTab === "editor" && entry.contentTypeId === "page" ? (
+          <div style={{ height: "calc(100vh - 220px)" }}>
+            <PageEditorTab entryId={entry.id} locale={firstLocale} />
+          </div>
+        ) : viewTab === "preview" && entry.type === "Partner Email" ? (
+          (() => {
+            const opcoKey = parentData.opcoId.toLowerCase();
+            const programme = OPCO_PROGRAMME_MAP[opcoKey];
+            if (!programme) {
+              return (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4">
                   <svg
-                    className="w-3.5 h-3.5"
+                    className="w-5 h-5 shrink-0 mt-0.5 text-amber-600"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -1112,472 +1072,435 @@ export default function EntryDetail() {
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
                     />
                   </svg>
-                  Open in new tab
-                </a>
-              </div>
-              {/* Disclaimer */}
-              <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
-                <svg
-                  className="w-4 h-4 shrink-0 mt-0.5 text-amber-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span>
-                  <strong className="font-semibold">Preview only.</strong> Some
-                  values shown — such as member names, point balances, and
-                  transaction details — are{" "}
-                  <strong className="font-semibold">
-                    mocked placeholder data
-                  </strong>{" "}
-                  generated by the backend. Only the text and content pulled
-                  from Contentful (headings, body copy, CTAs) reflects what you
-                  are editing here.{" "}
-                  <button
-                    onClick={() => setPreviewHelpOpen(true)}
-                    className="inline font-semibold text-red-600 hover:text-red-800 underline underline-offset-2 transition-colors"
-                  >
-                    Preview not loading?
-                  </button>
-                </span>
-              </div>
-
-              {/* Preview not loading — help modal */}
-              {previewHelpOpen && (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                  onMouseDown={(e) => {
-                    if (e.target === e.currentTarget) setPreviewHelpOpen(false);
-                  }}
-                >
-                  <div
-                    className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                    onClick={() => setPreviewHelpOpen(false)}
-                  />
-                  <div className="relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
-                    {/* Modal header */}
-                    <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
-                      <div className="w-8 h-8 rounded-lg bg-red-50 border border-red-200/60 flex items-center justify-center shrink-0">
-                        <svg
-                          className="w-4 h-4 text-red-500"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                          />
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h2 className="text-sm font-bold text-gray-900 leading-none">
-                          Preview not loading?
-                        </h2>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          Likely a CSP{" "}
-                          <code className="bg-gray-100 px-1 rounded">
-                            frame-ancestors
-                          </code>{" "}
-                          restriction
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setPreviewHelpOpen(false)}
-                        className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2.5}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                    {/* Modal body */}
-                    <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4 text-xs">
-                      <p className="text-gray-600 leading-relaxed">
-                        The preview is embedded in an{" "}
-                        <code className="bg-gray-100 px-1 rounded">iframe</code>
-                        . Browsers silently block iframes when the response
-                        carries a{" "}
-                        <code className="bg-gray-100 px-1 rounded">
-                          Content-Security-Policy: frame-ancestors
-                        </code>{" "}
-                        header that does not include this tool&apos;s origin —
-                        the frame loads but renders blank with no JavaScript
-                        error.
-                      </p>
-                      <div>
-                        <p className="font-semibold text-gray-800 mb-2">
-                          To fix — ask the API team to extend the CSP header on
-                          the preview endpoint:
-                        </p>
-                        <pre className="bg-gray-900 text-emerald-400 rounded-xl px-4 py-3 overflow-x-auto text-[11px] leading-relaxed whitespace-pre-wrap">{`Content-Security-Policy: frame-ancestors 'self'
-  https://contentful.tools.avios.com
-  http://localhost:5173
-  http://localhost:3000`}</pre>
-                        <p className="mt-2 text-gray-400">
-                          The exact value depends on what is already set. The
-                          key addition is{" "}
-                          <code className="bg-gray-100 px-1 rounded">
-                            https://contentful.tools.avios.com
-                          </code>{" "}
-                          for production and the localhost origins for local
-                          development.
-                        </p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800 mb-1.5">
-                          Check the endpoint directly
-                        </p>
-                        <p className="text-gray-500 mb-2">
-                          Open the URL below in a new tab. If it renders
-                          correctly, the endpoint works — the issue is only the{" "}
-                          <code className="bg-gray-100 px-1 rounded">
-                            frame-ancestors
-                          </code>{" "}
-                          header blocking the iframe embed.
-                        </p>
-                        <a
-                          href={previewUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-blue-600 hover:text-blue-800 break-all leading-relaxed"
-                        >
-                          {previewUrl}
-                        </a>
-                      </div>
-                      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3.5 py-3">
-                        <p className="font-semibold text-gray-700 mb-1">
-                          Inspect the response headers in DevTools
-                        </p>
-                        <ol className="list-decimal list-inside text-gray-500 space-y-0.5">
-                          <li>Open DevTools → Network tab</li>
-                          <li>
-                            Load the URL above directly or reload this page
-                          </li>
-                          <li>Find the preview request and click it</li>
-                          <li>
-                            Check the <strong>Response Headers</strong> for{" "}
-                            <code className="bg-gray-100 px-1 rounded">
-                              content-security-policy
-                            </code>
-                          </li>
-                        </ol>
-                      </div>
-                    </div>
-                    {/* Modal footer */}
-                    <div className="px-5 py-3 border-t border-gray-100 flex justify-end shrink-0">
-                      <button
-                        onClick={() => setPreviewHelpOpen(false)}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gray-800 hover:bg-gray-700 transition-colors"
-                      >
-                        Got it
-                      </button>
-                    </div>
+                  <div>
+                    <p className="text-sm font-bold text-amber-800">
+                      Unknown OPCO programme code for &ldquo;{opcoKey}&rdquo;
+                    </p>
+                    <p className="mt-1 text-xs text-amber-700 leading-relaxed">
+                      The email preview API requires a{" "}
+                      <code className="bg-amber-100 px-1 rounded">
+                        programme
+                      </code>{" "}
+                      query parameter, but{" "}
+                      <code className="bg-amber-100 px-1 rounded">
+                        {opcoKey}
+                      </code>{" "}
+                      is not in the OPCO → programme map. Add it to{" "}
+                      <code className="bg-amber-100 px-1 rounded">
+                        OPCO_PROGRAMME_MAP
+                      </code>{" "}
+                      in{" "}
+                      <code className="bg-amber-100 px-1 rounded">
+                        app/routes/home.entry.tsx
+                      </code>
+                      .
+                    </p>
+                    <p className="mt-2 text-[11px] text-amber-600 font-mono">
+                      Current map: {JSON.stringify(OPCO_PROGRAMME_MAP)}
+                    </p>
                   </div>
                 </div>
-              )}
-              {/* iframe */}
-              <div
-                className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm"
-                style={{ height: "calc(100vh - 330px)", minHeight: "480px" }}
-              >
-                {/* Loading overlay — hidden once iframe fires onLoad */}
-                {!iframeLoaded && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-gray-50">
+              );
+            }
+            const templateValue =
+              resolveStringField(entry.fields["type"], previewLocale) ??
+              entry.contentTypeId;
+            const previewUrl = `https://stg.avios.com/spend-avios/vouchers/api/internal/email/template?template=${encodeURIComponent(templateValue)}&programme=${encodeURIComponent(programme)}&partner=${encodeURIComponent(parentData.partnerId.toLowerCase())}&locale=${encodeURIComponent(previewLocale)}&preview=true`;
+            return (
+              <div className="flex flex-col gap-3">
+                {/* Toolbar */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-xs text-gray-500 font-medium shrink-0">
+                    Locale:
+                  </span>
+                  <select
+                    value={previewLocale}
+                    onChange={(e) => setPreviewLocale(e.target.value)}
+                    className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {locales?.items.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.code}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] font-mono text-gray-400 bg-gray-100 border border-gray-200 rounded px-2 py-1 flex-1 truncate hidden sm:block">
+                    {previewUrl}
+                  </span>
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-auto shrink-0 flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                  >
                     <svg
-                      className="w-6 h-6 text-blue-400 animate-spin"
+                      className="w-3.5 h-3.5"
                       fill="none"
                       viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
                     >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
                       <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                       />
                     </svg>
-                    <span className="text-xs text-gray-400">
-                      Loading email preview…
-                    </span>
+                    Open in new tab
+                  </a>
+                </div>
+                {/* Disclaimer */}
+                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+                  <svg
+                    className="w-4 h-4 shrink-0 mt-0.5 text-amber-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span>
+                    <strong className="font-semibold">Preview only.</strong>{" "}
+                    Some values shown — such as member names, point balances,
+                    and transaction details — are{" "}
+                    <strong className="font-semibold">
+                      mocked placeholder data
+                    </strong>{" "}
+                    generated by the backend. Only the text and content pulled
+                    from Contentful (headings, body copy, CTAs) reflects what
+                    you are editing here.{" "}
+                    <button
+                      onClick={() => setPreviewHelpOpen(true)}
+                      className="inline font-semibold text-red-600 hover:text-red-800 underline underline-offset-2 transition-colors"
+                    >
+                      Preview not loading?
+                    </button>
+                  </span>
+                </div>
+
+                {/* Preview not loading — help modal */}
+                {previewHelpOpen && (
+                  <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    onMouseDown={(e) => {
+                      if (e.target === e.currentTarget)
+                        setPreviewHelpOpen(false);
+                    }}
+                  >
+                    <div
+                      className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                      onClick={() => setPreviewHelpOpen(false)}
+                    />
+                    <div className="relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+                      {/* Modal header */}
+                      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-red-50 border border-red-200/60 flex items-center justify-center shrink-0">
+                          <svg
+                            className="w-4 h-4 text-red-500"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h2 className="text-sm font-bold text-gray-900 leading-none">
+                            Preview not loading?
+                          </h2>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            Likely a CSP{" "}
+                            <code className="bg-gray-100 px-1 rounded">
+                              frame-ancestors
+                            </code>{" "}
+                            restriction
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setPreviewHelpOpen(false)}
+                          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      {/* Modal body */}
+                      <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4 text-xs">
+                        <p className="text-gray-600 leading-relaxed">
+                          The preview is embedded in an{" "}
+                          <code className="bg-gray-100 px-1 rounded">
+                            iframe
+                          </code>
+                          . Browsers silently block iframes when the response
+                          carries a{" "}
+                          <code className="bg-gray-100 px-1 rounded">
+                            Content-Security-Policy: frame-ancestors
+                          </code>{" "}
+                          header that does not include this tool&apos;s origin —
+                          the frame loads but renders blank with no JavaScript
+                          error.
+                        </p>
+                        <div>
+                          <p className="font-semibold text-gray-800 mb-2">
+                            To fix — ask the API team to extend the CSP header
+                            on the preview endpoint:
+                          </p>
+                          <pre className="bg-gray-900 text-emerald-400 rounded-xl px-4 py-3 overflow-x-auto text-[11px] leading-relaxed whitespace-pre-wrap">{`Content-Security-Policy: frame-ancestors 'self'
+  https://contentful.tools.avios.com
+  http://localhost:5173
+  http://localhost:4321`}</pre>
+                          <p className="mt-2 text-gray-400">
+                            The exact value depends on what is already set. The
+                            key addition is{" "}
+                            <code className="bg-gray-100 px-1 rounded">
+                              https://contentful.tools.avios.com
+                            </code>{" "}
+                            for production and the localhost origins for local
+                            development.
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-800 mb-1.5">
+                            Check the endpoint directly
+                          </p>
+                          <p className="text-gray-500 mb-2">
+                            Open the URL below in a new tab. If it renders
+                            correctly, the endpoint works — the issue is only
+                            the{" "}
+                            <code className="bg-gray-100 px-1 rounded">
+                              frame-ancestors
+                            </code>{" "}
+                            header blocking the iframe embed.
+                          </p>
+                          <a
+                            href={previewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-blue-600 hover:text-blue-800 break-all leading-relaxed"
+                          >
+                            {previewUrl}
+                          </a>
+                        </div>
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 px-3.5 py-3">
+                          <p className="font-semibold text-gray-700 mb-1">
+                            Inspect the response headers in DevTools
+                          </p>
+                          <ol className="list-decimal list-inside text-gray-500 space-y-0.5">
+                            <li>Open DevTools → Network tab</li>
+                            <li>
+                              Load the URL above directly or reload this page
+                            </li>
+                            <li>Find the preview request and click it</li>
+                            <li>
+                              Check the <strong>Response Headers</strong> for{" "}
+                              <code className="bg-gray-100 px-1 rounded">
+                                content-security-policy
+                              </code>
+                            </li>
+                          </ol>
+                        </div>
+                      </div>
+                      {/* Modal footer */}
+                      <div className="px-5 py-3 border-t border-gray-100 flex justify-end shrink-0">
+                        <button
+                          onClick={() => setPreviewHelpOpen(false)}
+                          className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gray-800 hover:bg-gray-700 transition-colors"
+                        >
+                          Got it
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
-                <iframe
-                  key={previewUrl}
-                  src={previewUrl}
-                  className="w-full h-full border-0"
-                  title="Email Preview"
-                  onLoad={() => setIframeLoaded(true)}
-                />
+                {/* iframe */}
+                <div
+                  className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm"
+                  style={{ height: "calc(100vh - 330px)", minHeight: "480px" }}
+                >
+                  {/* Loading overlay — hidden once iframe fires onLoad */}
+                  {!iframeLoaded && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-gray-50">
+                      <svg
+                        className="w-6 h-6 text-blue-400 animate-spin"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                        />
+                      </svg>
+                      <span className="text-xs text-gray-400">
+                        Loading email preview…
+                      </span>
+                    </div>
+                  )}
+                  <iframe
+                    key={previewUrl}
+                    src={previewUrl}
+                    className="w-full h-full border-0"
+                    title="Email Preview"
+                    onLoad={() => setIframeLoaded(true)}
+                  />
+                </div>
               </div>
-            </div>
-          );
-        })()
-      ) : (
-        <>
-          {/* Inner locale tab bar — only shown when at least one field is localizable */}
-          {hasLocalizedFields && (
-            <div className="flex gap-1 border-b border-gray-300 mb-0">
-              <button
-                onClick={() => setActiveTab("all")}
-                className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
-                  activeTab === "all"
-                    ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Common Fields
-              </button>
-              <button
-                onClick={() => setActiveTab("all-locales")}
-                className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
-                  activeTab === "all-locales"
-                    ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                All locales
-              </button>
-              {locales?.items.map((locale) => (
+            );
+          })()
+        ) : (
+          <>
+            {/* Inner locale tab bar — only shown when at least one field is localizable */}
+            {hasLocalizedFields && (
+              <div className="flex gap-1 border-b border-gray-300 mb-0">
                 <button
-                  key={locale.code}
-                  onClick={() => setActiveTab(locale.code)}
+                  onClick={() => setActiveTab("all")}
                   className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
-                    activeTab === locale.code
+                    activeTab === "all"
                       ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
                       : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  {locale.code}
+                  Common Fields
                 </button>
-              ))}
-            </div>
-          )}
+                <button
+                  onClick={() => setActiveTab("all-locales")}
+                  className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
+                    activeTab === "all-locales"
+                      ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  All locales
+                </button>
+                {locales?.items.map((locale) => (
+                  <button
+                    key={locale.code}
+                    onClick={() => setActiveTab(locale.code)}
+                    className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
+                      activeTab === locale.code
+                        ? "bg-gray-100 border border-b-gray-100 border-gray-300 text-blue-600 -mb-px"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {locale.code}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {/* Fields table */}
-          <div className="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-x-auto relative">
-            {contentTypeLoading ? (
-              // Skeleton rows while content-type definition is being fetched
-              <div
-                style={{
-                  animation: "skeleton-shimmer 1.4s ease-in-out infinite",
-                }}
-              >
+            {/* Fields table */}
+            <div className="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-x-auto relative">
+              {contentTypeLoading ? (
+                // Skeleton rows while content-type definition is being fetched
+                <div
+                  style={{
+                    animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                  }}
+                >
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-300 bg-gray-200">
+                        <th className="text-left px-4 py-2.5 w-55">
+                          <div className="h-3 w-16 bg-gray-300 rounded" />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <div className="h-3 w-20 bg-gray-300 rounded" />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <tr
+                          key={i}
+                          className={
+                            i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
+                          }
+                        >
+                          <td className="px-4 py-3">
+                            <div className="h-3 w-28 bg-gray-200 rounded" />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div
+                              className="h-3 bg-gray-200 rounded"
+                              style={{ width: `${38 + ((i * 31) % 48)}%` }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : !hasLocalizedFields ? (
+                // No localizable fields — simple flat table
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="border-b border-gray-300 bg-gray-200">
-                      <th className="text-left px-4 py-2.5 w-55">
-                        <div className="h-3 w-16 bg-gray-300 rounded" />
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-55">
+                        Field
                       </th>
-                      <th className="text-left px-4 py-2.5">
-                        <div className="h-3 w-20 bg-gray-300 rounded" />
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Value
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <tr
-                        key={i}
-                        className={
-                          i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
-                        }
-                      >
-                        <td className="px-4 py-3">
-                          <div className="h-3 w-28 bg-gray-200 rounded" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div
-                            className="h-3 bg-gray-200 rounded"
-                            style={{ width: `${38 + ((i * 31) % 48)}%` }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : !hasLocalizedFields ? (
-              // No localizable fields — simple flat table
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-300 bg-gray-200">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-55">
-                      Field
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      Value
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(entry.fields)
-                    .filter(
-                      ([fieldKey]) => !STRUCTURAL_FIELD_KEYS.has(fieldKey),
-                    )
-                    .map(([fieldKey, localeValues], i) => {
-                      const value =
-                        localeValues?.[firstLocale] ??
-                        Object.values(localeValues ?? {})[0];
-                      return (
-                        <tr
-                          key={fieldKey}
-                          className={
-                            i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
-                          }
-                        >
-                          <td className="px-4 py-2.5 align-top">
-                            <span className="font-mono text-xs text-gray-400">
-                              {fieldKey}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 align-top wrap-break-word">
-                            <EditableCell
-                              fieldKey={fieldKey}
-                              locale={firstLocale}
-                              rawValue={value}
-                              entryId={entry.id}
-                              editingCell={editingCell}
-                              setEditingCell={setEditingCell}
-                              draftValue={draftValue}
-                              setDraftValue={setDraftValue}
-                              localOverrides={localOverrides}
-                              onSaved={handleSaved}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            ) : activeTab === "all" ? (
-              // Common Fields: non-localizable fields only
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-300 bg-gray-200">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-55">
-                      Field
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      Value
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(entry.fields)
-                    .filter(
-                      ([fieldKey]) =>
-                        !STRUCTURAL_FIELD_KEYS.has(fieldKey) &&
-                        localizedMap[fieldKey] === false,
-                    )
-                    .map(([fieldKey, localeValues], i) => {
-                      const value =
-                        localeValues?.[firstLocale] ??
-                        Object.values(localeValues ?? {})[0];
-                      return (
-                        <tr
-                          key={fieldKey}
-                          className={
-                            i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
-                          }
-                        >
-                          <td className="px-4 py-2.5 align-top">
-                            <span className="font-mono text-xs text-gray-400">
-                              {fieldKey}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 align-top wrap-break-word">
-                            <EditableCell
-                              fieldKey={fieldKey}
-                              locale={firstLocale}
-                              rawValue={value}
-                              entryId={entry.id}
-                              editingCell={editingCell}
-                              setEditingCell={setEditingCell}
-                              draftValue={draftValue}
-                              setDraftValue={setDraftValue}
-                              localOverrides={localOverrides}
-                              onSaved={handleSaved}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            ) : activeTab === "all-locales" ? (
-              // All locales grid: localizable fields × locales
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-300 bg-gray-200">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-45 sticky left-0 bg-gray-200">
-                      Field
-                    </th>
-                    {locales?.items.map((locale) => (
-                      <th
-                        key={locale.code}
-                        className="text-left px-4 py-2.5 text-xs font-semibold text-blue-600 uppercase tracking-wide min-w-45"
-                      >
-                        {locale.code}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(entry.fields)
-                    .filter(
-                      ([fieldKey]) =>
-                        !STRUCTURAL_FIELD_KEYS.has(fieldKey) &&
-                        localizedMap[fieldKey] !== false,
-                    )
-                    .map(([fieldKey, localeValues], i) => {
-                      const rowBg =
-                        i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50";
-                      return (
-                        <tr key={fieldKey} className={rowBg}>
-                          <td
-                            className={`px-4 py-2.5 align-top sticky left-0 ${rowBg}`}
+                    {Object.entries(entry.fields)
+                      .filter(
+                        ([fieldKey]) => !STRUCTURAL_FIELD_KEYS.has(fieldKey),
+                      )
+                      .map(([fieldKey, localeValues], i) => {
+                        const value =
+                          localeValues?.[firstLocale] ??
+                          Object.values(localeValues ?? {})[0];
+                        return (
+                          <tr
+                            key={fieldKey}
+                            className={
+                              i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
+                            }
                           >
-                            <span className="font-mono text-xs text-gray-400">
-                              {fieldKey}
-                            </span>
-                          </td>
-                          {locales?.items.map((locale) => (
-                            <td
-                              key={locale.code}
-                              className="px-4 py-2.5 align-top border-l border-gray-200 wrap-break-word max-w-75"
-                            >
+                            <td className="px-4 py-2.5 align-top">
+                              <span className="font-mono text-xs text-gray-400">
+                                {fieldKey}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 align-top wrap-break-word">
                               <EditableCell
                                 fieldKey={fieldKey}
-                                locale={locale.code}
-                                rawValue={localeValues?.[locale.code]}
+                                locale={firstLocale}
+                                rawValue={value}
                                 entryId={entry.id}
                                 editingCell={editingCell}
                                 setEditingCell={setEditingCell}
@@ -1587,66 +1510,182 @@ export default function EntryDetail() {
                                 onSaved={handleSaved}
                               />
                             </td>
-                          ))}
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              ) : activeTab === "all" ? (
+                // Common Fields: non-localizable fields only
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-300 bg-gray-200">
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-55">
+                        Field
+                      </th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Value
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(entry.fields)
+                      .filter(
+                        ([fieldKey]) =>
+                          !STRUCTURAL_FIELD_KEYS.has(fieldKey) &&
+                          localizedMap[fieldKey] === false,
+                      )
+                      .map(([fieldKey, localeValues], i) => {
+                        const value =
+                          localeValues?.[firstLocale] ??
+                          Object.values(localeValues ?? {})[0];
+                        return (
+                          <tr
+                            key={fieldKey}
+                            className={
+                              i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
+                            }
+                          >
+                            <td className="px-4 py-2.5 align-top">
+                              <span className="font-mono text-xs text-gray-400">
+                                {fieldKey}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 align-top wrap-break-word">
+                              <EditableCell
+                                fieldKey={fieldKey}
+                                locale={firstLocale}
+                                rawValue={value}
+                                entryId={entry.id}
+                                editingCell={editingCell}
+                                setEditingCell={setEditingCell}
+                                draftValue={draftValue}
+                                setDraftValue={setDraftValue}
+                                localOverrides={localOverrides}
+                                onSaved={handleSaved}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              ) : activeTab === "all-locales" ? (
+                // All locales grid: localizable fields × locales
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-300 bg-gray-200">
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-45 sticky left-0 bg-gray-200">
+                        Field
+                      </th>
+                      {locales?.items.map((locale) => (
+                        <th
+                          key={locale.code}
+                          className="text-left px-4 py-2.5 text-xs font-semibold text-blue-600 uppercase tracking-wide min-w-45"
+                        >
+                          {locale.code}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(entry.fields)
+                      .filter(
+                        ([fieldKey]) =>
+                          !STRUCTURAL_FIELD_KEYS.has(fieldKey) &&
+                          localizedMap[fieldKey] !== false,
+                      )
+                      .map(([fieldKey, localeValues], i) => {
+                        const rowBg =
+                          i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50";
+                        return (
+                          <tr key={fieldKey} className={rowBg}>
+                            <td
+                              className={`px-4 py-2.5 align-top sticky left-0 ${rowBg}`}
+                            >
+                              <span className="font-mono text-xs text-gray-400">
+                                {fieldKey}
+                              </span>
+                            </td>
+                            {locales?.items.map((locale) => (
+                              <td
+                                key={locale.code}
+                                className="px-4 py-2.5 align-top border-l border-gray-200 wrap-break-word max-w-75"
+                              >
+                                <EditableCell
+                                  fieldKey={fieldKey}
+                                  locale={locale.code}
+                                  rawValue={localeValues?.[locale.code]}
+                                  entryId={entry.id}
+                                  editingCell={editingCell}
+                                  setEditingCell={setEditingCell}
+                                  draftValue={draftValue}
+                                  setDraftValue={setDraftValue}
+                                  localOverrides={localOverrides}
+                                  onSaved={handleSaved}
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              ) : (
+                // Single-locale view: localizable fields for the selected locale
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-300 bg-gray-200">
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-55">
+                        Field
+                      </th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+                        {activeTab}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(entry.fields)
+                      .filter(
+                        ([fieldKey]) =>
+                          !STRUCTURAL_FIELD_KEYS.has(fieldKey) &&
+                          localizedMap[fieldKey] !== false,
+                      )
+                      .map(([fieldKey, localeValues], i) => (
+                        <tr
+                          key={fieldKey}
+                          className={
+                            i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
+                          }
+                        >
+                          <td className="px-4 py-2.5 align-top">
+                            <span className="font-mono text-xs text-gray-400">
+                              {fieldKey}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 align-top wrap-break-word">
+                            <EditableCell
+                              fieldKey={fieldKey}
+                              locale={activeTab}
+                              rawValue={localeValues?.[activeTab]}
+                              entryId={entry.id}
+                              editingCell={editingCell}
+                              setEditingCell={setEditingCell}
+                              draftValue={draftValue}
+                              setDraftValue={setDraftValue}
+                              localOverrides={localOverrides}
+                              onSaved={handleSaved}
+                            />
+                          </td>
                         </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            ) : (
-              // Single-locale view: localizable fields for the selected locale
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-300 bg-gray-200">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-55">
-                      Field
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-blue-600 uppercase tracking-wide">
-                      {activeTab}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(entry.fields)
-                    .filter(
-                      ([fieldKey]) =>
-                        !STRUCTURAL_FIELD_KEYS.has(fieldKey) &&
-                        localizedMap[fieldKey] !== false,
-                    )
-                    .map(([fieldKey, localeValues], i) => (
-                      <tr
-                        key={fieldKey}
-                        className={
-                          i % 2 === 0 ? "bg-gray-100" : "bg-gray-200/50"
-                        }
-                      >
-                        <td className="px-4 py-2.5 align-top">
-                          <span className="font-mono text-xs text-gray-400">
-                            {fieldKey}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 align-top wrap-break-word">
-                          <EditableCell
-                            fieldKey={fieldKey}
-                            locale={activeTab}
-                            rawValue={localeValues?.[activeTab]}
-                            entryId={entry.id}
-                            editingCell={editingCell}
-                            setEditingCell={setEditingCell}
-                            draftValue={draftValue}
-                            setDraftValue={setDraftValue}
-                            localOverrides={localOverrides}
-                            onSaved={handleSaved}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </>
-      )}
+                      ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </main>
   );
 }
