@@ -151,6 +151,212 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Features */}
+        <section className="py-10 border-b border-gray-100">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-6">
+            Features
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                    />
+                  </svg>
+                ),
+                color: "text-sky-600 bg-sky-50 border-sky-100",
+                title: "Environment Overview",
+                desc: "Dashboard with space stats, unpublished count, scheduled actions, content freshness, and onboarding progress at a glance.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                ),
+                color: "text-emerald-600 bg-emerald-50 border-emerald-100",
+                title: "Onboarding Checklist",
+                desc: "Structured OPCO and partner setup checklist. Progress is saved directly to Contentful so your whole team stays in sync.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                    />
+                  </svg>
+                ),
+                color: "text-indigo-600 bg-indigo-50 border-indigo-100",
+                title: "Inline Translations",
+                desc: "Spreadsheet-style table with one row per CMS field and one column per locale. Click any cell to edit, ⌘ Enter to save. Bulk import/export via CSV.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                ),
+                color: "text-amber-600 bg-amber-50 border-amber-100",
+                title: "Unpublished Changes",
+                desc: "Lists every entry whose draft differs from what is live. Field-level diff view, bulk publish, and per-entry publish with retry logic.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                ),
+                color: "text-violet-600 bg-violet-50 border-violet-100",
+                title: "Scheduled Actions",
+                desc: "View and cancel all queued publish/unpublish actions across the environment. Real-time count badge in the sidebar.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                    />
+                  </svg>
+                ),
+                color: "text-sky-600 bg-sky-50 border-sky-100",
+                title: "Sitemap",
+                desc: "Full page hierarchy tree with colour-coded publish status. Green = live, amber = unpublished draft, grey = never published.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                ),
+                color: "text-rose-600 bg-rose-50 border-rose-100",
+                title: "Asset Browser",
+                desc: "Paginated media library with thumbnails, file metadata, reference maps, and one-click copy of asset IDs or URLs.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                ),
+                color: "text-blue-600 bg-blue-50 border-blue-100",
+                title: "Entry Detail & Editor",
+                desc: "Field viewer, inline string/number/boolean editing, rich text rendering, reference cards, visual page editor, and email template preview.",
+              },
+              {
+                icon: (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                    />
+                  </svg>
+                ),
+                color: "text-gray-600 bg-gray-50 border-gray-200",
+                title: "Dark Mode",
+                desc: "Full dark theme using remapped Tailwind CSS variables. Toggle from the sidebar — no page reload required.",
+              },
+            ].map((f) => (
+              <div
+                key={f.title}
+                className={`flex gap-3 p-4 rounded-lg border ${f.color}`}
+              >
+                <div className="shrink-0 mt-0.5">{f.icon}</div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-800 mb-1">
+                    {f.title}
+                  </p>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {f.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Key concepts */}
         <section className="py-10 border-b border-gray-100">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-6">

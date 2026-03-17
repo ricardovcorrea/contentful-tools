@@ -55,7 +55,10 @@ Use the two dropdowns in the left sidebar. Selecting an OPCO loads all its partn
 - ✅ Credentials and environment persisted in `localStorage`
 - ✅ Environment switching from the header (no re-login)
 - ✅ Logout wipes token and all cached data
-- ✅ Guided onboarding tour for first-time users
+- ✅ Activity-based session expiry (2-hour inactivity timeout)
+- ✅ One-click reconnect after session expiry (credentials pre-filled, no full re-login)
+- ✅ `returnTo` redirect — protected pages send you back after login
+- ✅ Guided onboarding tour for first-time users (re-openable from sidebar)
 - ⬜ Role-based read/write permissions based on CMA token scopes
 - ⬜ Support for multiple saved CMA profiles (switch accounts)
 
@@ -65,8 +68,31 @@ Use the two dropdowns in the left sidebar. Selecting an OPCO loads all its partn
 - ✅ URL-param driven scope (`?opco=` / `?partner=`) — shareable links
 - ✅ Create new OPCO or Partner directly from the UI
 - ✅ Global edit mode toggle (locks/unlocks all inline editing)
+- ✅ Dark mode — full theme with remapped Tailwind CSS variables
 - ⬜ Favourite / pinned OPCO+partner combinations
 - ⬜ Breadcrumb navigation for deep-linked entries
+
+### Environment Overview (Dashboard)
+- ✅ Space stats (total entries, total assets, environment ID/name)
+- ✅ Unpublished entries summary card with count
+- ✅ Scheduled actions summary card with count
+- ✅ Content freshness indicator (cache age)
+- ✅ Onboarding progress card (% complete across OPCO+partner)
+- ✅ Quick-access Translations card
+- ✅ Deep-link to open the environment in Contentful
+- ⬜ Content type explorer (list all types and their fields)
+- ⬜ Webhook activity log viewer
+
+### Onboarding Checklist
+- ✅ Structured setup checklist for new OPCO and partner onboarding
+- ✅ Sections: Backend, Frontend, CMS Setup, and partner-specific tasks
+- ✅ Progress saved directly to the OPCO's Contentful entry (`customData.onboarding`)
+- ✅ Side-by-side OPCO + Partner checklist layout
+- ✅ All sections expanded by default; accordion collapse per section
+- ✅ Per-partner storage keyed by partner ID (not sys.id)
+- ✅ Always fetches fresh data on load (no stale checklist state)
+- ⬜ Export checklist status as PDF/CSV
+- ⬜ Assignee field per checklist item
 
 ### Translations (Overview)
 - ✅ Translation table — one row per field, one column per locale
@@ -147,12 +173,6 @@ Use the two dropdowns in the left sidebar. Selecting an OPCO loads all its partn
 - ⬜ View entry changelog / revision history
 - ⬜ Rich text inline editing
 - ⬜ Save visual editor changes back to Contentful
-
-### Environment & Monitoring
-- ✅ Space stats (total entries, total assets, environment ID/name)
-- ✅ Deep-link to open the environment in Contentful
-- ⬜ Content type explorer (list all types and their fields)
-- ⬜ Webhook activity log viewer
 
 ### Caching & Performance
 - ✅ TanStack Query with 24-hour stale time, persisted to `localStorage`
