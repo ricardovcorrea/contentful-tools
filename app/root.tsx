@@ -13,6 +13,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "~/lib/query-client";
 import { EditModeProvider } from "~/lib/edit-mode";
+import { DarkModeProvider } from "~/lib/dark-mode";
 
 export const meta: Route.MetaFunction = () => [
   { title: "Contentful Tools" },
@@ -41,7 +42,7 @@ export const links: Route.LinksFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -60,13 +61,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <EditModeProvider>
-        <Outlet />
-        <ReactQueryDevtools
-          initialIsOpen={false}
-          buttonPosition="bottom-right"
-        />
-      </EditModeProvider>
+      <DarkModeProvider>
+        <EditModeProvider>
+          <Outlet />
+          <ReactQueryDevtools
+            initialIsOpen={false}
+            buttonPosition="bottom-right"
+          />
+        </EditModeProvider>
+      </DarkModeProvider>
     </QueryClientProvider>
   );
 }

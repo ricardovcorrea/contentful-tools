@@ -702,7 +702,6 @@ export default function UnpublishedPage() {
               <label className="flex items-center gap-2 text-xs text-gray-500 select-none cursor-pointer">
                 <input
                   type="checkbox"
-                  disabled={!editMode}
                   checked={allChecked}
                   ref={(el) => {
                     if (el) el.indeterminate = someChecked;
@@ -785,7 +784,6 @@ export default function UnpublishedPage() {
                           <input
                             type="checkbox"
                             disabled={
-                              !editMode ||
                               publishState === "loading" ||
                               publishState === "done"
                             }

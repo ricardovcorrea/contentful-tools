@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { CacheInspectorModal } from "./CacheInspectorModal";
+import { useDarkMode } from "~/lib/dark-mode";
 
 // Keep in sync with SESSION_INACTIVITY_MS in home.tsx.
 const SESSION_INACTIVITY_DISPLAY = "2 hours";
@@ -45,6 +46,7 @@ interface Props {
 export function AppFooter({ maskedToken, sessionExpiresAt = null }: Props) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const countdown = useSessionCountdown(sessionExpiresAt ?? null);
+  const { theme, toggle } = useDarkMode();
 
   return (
     <>
@@ -84,6 +86,7 @@ export function AppFooter({ maskedToken, sessionExpiresAt = null }: Props) {
               Inactivity logout in {countdown}
             </span>
           )}
+          {/* Cache inspector */}
           <button
             onClick={() => setInspectorOpen(true)}
             title="Inspect React Query cache"
@@ -108,6 +111,57 @@ export function AppFooter({ maskedToken, sessionExpiresAt = null }: Props) {
               />
             </svg>
             Manage cache
+          </button>
+
+          {/* Dark / light mode toggle */}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={
+              theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+            }
+            title={
+              theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+            }
+            className="group flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            {/* Sun icon */}
+            <svg
+              className={`w-3.5 h-3.5 shrink-0 transition-opacity ${
+                theme === "light" ? "opacity-100 text-amber-400" : "opacity-30"
+              }`}
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M12 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm0 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm8-8a1 1 0 110 2h-1a1 1 0 110-2h1zM4 12a1 1 0 110 2H3a1 1 0 110-2h1zm13.657-5.657a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM6.343 17.657a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17.657 17.657a1 1 0 01-1.414 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.414zM6.343 6.343a1 1 0 01-1.414 0l-.707-.707A1 1 0 015.636 4.22l.707.707a1 1 0 010 1.414zM12 7a5 5 0 100 10A5 5 0 0012 7z" />
+            </svg>
+
+            {/* Pill track */}
+            <span
+              className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full border transition-colors duration-200 ${
+                theme === "dark"
+                  ? "bg-blue-600 border-blue-700"
+                  : "bg-gray-200 border-gray-300"
+              }`}
+            >
+              {/* Thumb */}
+              <span
+                className={`inline-block h-2.5 w-2.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                  theme === "dark" ? "translate-x-[14px]" : "translate-x-[1px]"
+                }`}
+              />
+            </span>
+
+            {/* Moon icon */}
+            <svg
+              className={`w-3 h-3 shrink-0 transition-opacity ${
+                theme === "dark" ? "opacity-100 text-blue-400" : "opacity-30"
+              }`}
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z" />
+            </svg>
           </button>
         </div>
       </footer>
