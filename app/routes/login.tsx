@@ -917,7 +917,8 @@ function LoginModal({
                   />
                 </div>
                 <p className="text-xs text-gray-400 leading-relaxed">
-                  Don&apos;t have a token? Generate one under{" "}
+                  Don&apos;t have a token? Generate one under
+                  <br />
                   <a
                     href="https://app.contentful.com/account/profile/cma_tokens"
                     target="_blank"
