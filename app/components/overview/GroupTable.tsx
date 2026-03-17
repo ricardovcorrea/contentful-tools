@@ -7,6 +7,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { CellValue } from "~/components/overview/CellValue";
 import type { EntryGroup } from "~/types/contentful";
 import { resolveStringField } from "~/lib/resolve-string-field";
+import { isRichText, extractRichTextPlain } from "~/lib/rich-text";
 import { useToast } from "~/lib/toast";
 import { useEditMode } from "~/lib/edit-mode";
 
@@ -157,11 +158,14 @@ export function GroupTable({
     return name || null;
   };
 
+  // A value is considered "effectively empty" if it is absent, an empty string,
+  // an empty array, OR a Rich Text document with no visible text content.
   const isMissingValue = (val: unknown) =>
     val === undefined ||
     val === null ||
     val === "" ||
-    (Array.isArray(val) && val.length === 0);
+    (Array.isArray(val) && val.length === 0) ||
+    (isRichText(val) && extractRichTextPlain(val as any).trim() === "");
 
   const isFieldMissing = (
     fieldLocaleMap: Record<string, unknown> | undefined,

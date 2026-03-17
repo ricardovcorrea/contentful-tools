@@ -8,6 +8,7 @@ import { AppFooter } from "~/components/layout/AppFooter";
 import { OnboardingTour, isTourSeen } from "~/components/layout/OnboardingTour";
 import { ToastProvider } from "~/lib/toast";
 import { useEditMode } from "~/lib/edit-mode";
+import { isRichText, extractRichTextPlain } from "~/lib/rich-text";
 import {
   dispatchLoadStep,
   dispatchLoadComplete,
@@ -642,13 +643,16 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
         for (const fieldId of fields) {
           const map = item.fields[fieldId];
           const srcVal = map?.[firstLocale];
-          if (
+          // Treat empty Rich Text documents the same as missing/empty values —
+          // don't flag translation locales as missing when the source is also empty.
+          const srcIsMissing =
             srcVal === undefined ||
             srcVal === null ||
             srcVal === "" ||
-            (Array.isArray(srcVal) && srcVal.length === 0)
-          )
-            continue;
+            (Array.isArray(srcVal) && srcVal.length === 0) ||
+            (isRichText(srcVal) &&
+              extractRichTextPlain(srcVal as any).trim() === "");
+          if (srcIsMissing) continue;
           for (const lc of targetCodes) {
             const v = map?.[lc];
             if (

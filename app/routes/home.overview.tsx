@@ -566,11 +566,16 @@ function GroupTable({
     return name || null;
   };
 
+  // A value is considered "effectively empty" if it is absent, an empty string,
+  // an empty array, OR a Rich Text document with no visible text content.
+  // This prevents empty RT documents from being mistaken for "has a value",
+  // which would otherwise cause translation locales to be falsely flagged.
   const isMissingValue = (val: unknown) =>
     val === undefined ||
     val === null ||
     val === "" ||
-    (Array.isArray(val) && val.length === 0);
+    (Array.isArray(val) && val.length === 0) ||
+    (isRichText(val) && extractRichTextPlain(val as any).trim() === "");
 
   // en-GB is always the source column (firstLocale is hardcoded to "en-GB").
   // Other locales are only flagged missing when en-GB has a value but they don't.
