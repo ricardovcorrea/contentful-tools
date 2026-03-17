@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   clearContentfulManagementClient,
   getContentfulManagementClient,
@@ -7,7 +7,7 @@ import {
 import { LoadingScreen } from "~/components/loading-screen";
 
 export function meta() {
-  return [{ title: "Avios Content Tools" }];
+  return [{ title: "Avios Digital Vouchers Tools" }];
 }
 
 type Space = { sys: { id: string }; name: string };
@@ -72,7 +72,7 @@ export default function LandingPage() {
               </svg>
             </div>
             <span className="font-semibold text-gray-900 text-sm">
-              Avios Content Tools
+              Avios Digital Vouchers Tools
             </span>
             <span className="text-[10px] font-medium text-gray-400 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded">
               internal
@@ -365,6 +365,18 @@ function LoginModal({
   onDismissInactivity: () => void;
 }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Validate returnTo to prevent open-redirect attacks:
+  // - Must start with "/" to be a same-origin relative path.
+  // - Must NOT start with "//" (protocol-relative URL like //evil.com).
+  // - Must NOT contain ":" before the first "/" (blocks javascript:, data:, etc.).
+  const rawReturnTo = searchParams.get("returnTo") ?? "";
+  const returnTo =
+    rawReturnTo.startsWith("/") &&
+    !rawReturnTo.startsWith("//") &&
+    !/^[^/]*:/.test(rawReturnTo)
+      ? rawReturnTo
+      : "/";
 
   // For session-expired reconnect: check for saved credentials up-front.
   const savedToken = localStorage.getItem("contentfulManagementToken") ?? "";
@@ -473,15 +485,11 @@ function LoginModal({
       clearContentfulManagementClient();
     }
     setIsSuccess(true);
-    navigate("/");
+    navigate(returnTo);
   };
 
   if (isSuccess) {
-    return (
-      <div className="fixed inset-0 z-50 bg-white flex items-center justify-center">
-        <LoadingScreen />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   const selectedSpace = spaces.find((s) => s.sys.id === selectedSpaceId);
@@ -565,7 +573,7 @@ function LoginModal({
                 Avios
               </p>
               <p className="text-sm font-bold text-gray-900 leading-none">
-                Content Tools — Sign in
+                Digital Vouchers Tools — Sign in
               </p>
             </div>
             <button

@@ -104,7 +104,7 @@ export function AppHeader({
                 Avios
               </div>
               <div className="text-xs font-bold text-gray-900 leading-tight">
-                Content Tools
+                Digital Vouchers Tools
               </div>
             </div>
           </div>

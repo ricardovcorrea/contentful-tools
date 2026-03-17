@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouteLoaderData, useNavigate } from "react-router";
 import { resolveStringField } from "~/lib/resolve-string-field";
 import { getContentfulManagementEntries } from "~/lib/contentful";
@@ -652,21 +652,30 @@ function UnpublishedCard({
           <p className="text-xs font-medium">Failed to load</p>
         </div>
       ) : allGood ? (
-        <div className="flex flex-col items-center justify-center flex-1 py-10 gap-2 text-gray-400">
-          <svg
-            className="w-7 h-7"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <p className="text-xs font-medium">All entries are published</p>
+        <div className="flex flex-col items-center justify-center flex-1 py-10 gap-3 text-gray-400">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+            <svg
+              className="w-5 h-5 text-emerald-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <div className="text-center">
+            <p className="text-xs font-semibold text-gray-600">
+              All entries are published
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              Unpublished or modified entries will appear here
+            </p>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-4 px-5 py-4 flex-1">
@@ -744,7 +753,153 @@ function UnpublishedCard({
   );
 }
 
-// ── Content Freshness Card ────────────────────────────────────────────────────
+// ── Onboarding Card ─────────────────────────────────────────────────────────
+
+function OnboardingCard({
+  opcoEntry,
+  partnerEntry,
+  firstLocale,
+}: {
+  opcoEntry: any;
+  partnerEntry: any | null;
+  firstLocale: string;
+}) {
+  const navigate = useNavigate();
+
+  // Hardcoded step totals matching home.onboarding.tsx section definitions
+  const OPCO_TOTAL = 18; // backend(5) + frontend(4) + identity(4) + business(5)
+  const PARTNER_TOTAL = 16; // setup(4) + content(4) + brand(4) + commercial(4)
+
+  const countDone = (
+    sectionData: Record<string, Record<string, boolean>> | null | undefined,
+  ): number => {
+    if (!sectionData || typeof sectionData !== "object") return 0;
+    return Object.values(sectionData).reduce((sum, section) => {
+      if (typeof section !== "object" || section === null) return sum;
+      return sum + Object.values(section).filter(Boolean).length;
+    }, 0);
+  };
+
+  const onboarding = useMemo(() => {
+    const cd = opcoEntry?.fields?.["customData"]?.[firstLocale];
+    if (typeof cd !== "object" || cd === null) return {};
+    return (cd as any).onboarding ?? {};
+  }, [opcoEntry, firstLocale]);
+
+  const opcoDone = countDone(onboarding["opco"] ?? null);
+  const partnerDone = partnerEntry
+    ? countDone(onboarding[partnerEntry.sys.id] ?? null)
+    : 0;
+
+  const opcoComplete = opcoDone === OPCO_TOTAL;
+  const partnerComplete = partnerEntry ? partnerDone === PARTNER_TOTAL : null;
+
+  const opcoPct = Math.round((opcoDone / OPCO_TOTAL) * 100);
+  const partnerPct = partnerEntry
+    ? Math.round((partnerDone / PARTNER_TOTAL) * 100)
+    : 0;
+
+  const allComplete =
+    opcoComplete && (partnerEntry === null || partnerComplete === true);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50/60">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+          Onboarding
+        </p>
+        {allComplete && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200/60">
+            Complete
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1">
+        {/* OPCO row */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] font-bold uppercase tracking-wide text-sky-500">
+              OPCO
+            </span>
+            <span
+              className={`text-[9px] font-bold tabular-nums ${
+                opcoComplete ? "text-emerald-600" : "text-gray-400"
+              }`}
+            >
+              {opcoDone}/{OPCO_TOTAL}
+            </span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                opcoComplete ? "bg-emerald-500" : "bg-sky-500"
+              }`}
+              style={{ width: `${opcoPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Partner row */}
+        {partnerEntry ? (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] font-bold uppercase tracking-wide text-violet-500">
+                Partner
+              </span>
+              <span
+                className={`text-[9px] font-bold tabular-nums ${
+                  partnerComplete ? "text-emerald-600" : "text-gray-400"
+                }`}
+              >
+                {partnerDone}/{PARTNER_TOTAL}
+              </span>
+            </div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  partnerComplete ? "bg-emerald-500" : "bg-violet-500"
+                }`}
+                style={{ width: `${partnerPct}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <p className="text-[10px] text-gray-400 italic">
+            No partner selected
+          </p>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/60 mt-auto">
+        <button
+          onClick={() => navigate("/onboarding")}
+          className="flex items-center gap-1.5 text-[10px] font-semibold text-sky-600 hover:text-sky-700 transition-colors group"
+        >
+          View onboarding checklist
+          <svg
+            className="w-3 h-3 group-hover:translate-x-0.5 transition-transform"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Scheduled Card ────────────────────────────────────────────────────────────
 
 function ContentFreshnessCard({
   entries,
@@ -1053,7 +1208,7 @@ export default function EnvironmentOverview() {
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="min-w-0">
             <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
-              Environment
+              Environment · OPCO
             </p>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               {environmentName}
@@ -1134,8 +1289,13 @@ export default function EnvironmentOverview() {
           </div>
         </div>
 
-        {/* Row 2: translation coverage + content freshness */}
+        {/* Row 2: Onboarding + Translation coverage */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+          <OnboardingCard
+            opcoEntry={selectedOpcoEntry}
+            partnerEntry={selectedPartnerEntry ?? null}
+            firstLocale={firstLocale}
+          />
           <TranslationCoverageCard
             entryCount={allEntries.length}
             combinedStats={combinedStats}
@@ -1154,17 +1314,17 @@ export default function EnvironmentOverview() {
             opcoName={opcoName}
             partnerName={partnerName}
           />
+        </div>
+
+        {/* Row 3: Unpublished + Scheduled + Content freshness */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          <UnpublishedCard opcoId={opcoId} partnerId={partnerId} />
+          <ScheduledCard actions={scheduledActions} />
           <ContentFreshnessCard
             entries={allEntries}
             opcoName={opcoName}
             partnerName={partnerName}
           />
-        </div>
-
-        {/* Row 3: unpublished + scheduled */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <UnpublishedCard opcoId={opcoId} partnerId={partnerId} />
-          <ScheduledCard actions={scheduledActions} />
         </div>
       </div>
     </main>

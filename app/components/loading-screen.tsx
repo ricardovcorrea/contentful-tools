@@ -70,10 +70,10 @@ export function LoadingScreen() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-6">
+    <div className="fixed inset-0 z-[9999] bg-gray-100 flex items-center justify-center px-6">
       <div className="w-full max-w-md">
-        {/* Card — matches LoginModal design */}
-        <div className="bg-white rounded-2xl shadow-2xl shadow-gray-900/20 border border-gray-200 overflow-hidden">
+        {/* Card */}
+        <div className="bg-gray-50 rounded-2xl shadow-2xl shadow-gray-950/30 border border-gray-200 overflow-hidden">
           {/* Header — mirrors LoginModal header */}
           <div className="flex items-center gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-600/30 shrink-0">
@@ -96,7 +96,7 @@ export function LoadingScreen() {
                 Avios
               </p>
               <p className="text-sm font-bold text-gray-900 leading-none">
-                Content Tools — Loading workspace
+                Digital Vouchers Tools — Loading workspace
               </p>
             </div>
             {done && (
@@ -178,7 +178,7 @@ export function LoadingScreen() {
                   <span
                     className={`text-sm flex-1 transition-all duration-300 ${
                       isDone
-                        ? "text-gray-300 line-through decoration-gray-200"
+                        ? "text-gray-400 line-through decoration-gray-300"
                         : isActive
                           ? "text-gray-900 font-semibold"
                           : "text-gray-400"

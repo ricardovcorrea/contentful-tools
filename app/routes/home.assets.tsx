@@ -282,8 +282,7 @@ export default function AssetsPage() {
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="min-w-0">
             <p className="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">
-              {opcoDisplayName}
-              {partnerId ? ` · ${partnerDisplayName}` : ""}
+              Environment · OPCO
             </p>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               Assets

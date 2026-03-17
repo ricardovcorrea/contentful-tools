@@ -119,6 +119,15 @@ body {
   --color-blue-600: #96b0fd; /* links / text on dark bg   */
   --color-blue-700: #c2d0ff; /* emphasis text             */
 
+  /* ── Sky (Environment / sidebar accent) ─────────────────────────────── */
+  --color-sky-50: #0a1520; /* badge bg  */
+  --color-sky-100: #0e2035; /* highlight */
+  --color-sky-200: #14304f; /* border    */
+  --color-sky-300: #1e5080; /* accent    */
+  --color-sky-500: #38b2f0;
+  --color-sky-600: #7dd3fc; /* text on dark bg  */
+  --color-sky-700: #bae6fd; /* emphasis text    */
+
   /* ── Violet (OPCO) ──────────────────────────────────────────────────── */
   --color-violet-50: #110e28; /* badge bg  */
   --color-violet-100: #1c1940; /* highlight */
@@ -208,4 +217,15 @@ body {
   to {
     transform: scaleX(0);
   }
+}
+
+/* ── Onboarding accordion section headers ────────────────────────────────────
+   In light mode the coloured tints (bg-blue-50/60 etc.) are applied via
+   Tailwind classes on the button. In dark mode those same variables map to near-
+   black so we reset to a neutral surface and use a white-opacity hover instead. */
+.dark .onboarding-hdr {
+  background: transparent !important;
+}
+.dark .onboarding-hdr:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
 }

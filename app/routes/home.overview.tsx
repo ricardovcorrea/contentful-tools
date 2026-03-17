@@ -1301,8 +1301,16 @@ export default function OverviewPage() {
       "entry_id",
       "field",
       ...localeCodes,
+      "contentful_url",
     ];
     const rows: string[][] = [header];
+
+    const isMissing = (val: unknown) =>
+      val === undefined ||
+      val === null ||
+      val === "" ||
+      (Array.isArray(val) && val.length === 0) ||
+      (isRichText(val) && extractRichTextPlain(val as any).trim() === "");
 
     const buildRows = (groupList: EntryGroup[], prefix: string) => {
       for (const grp of groupList) {
@@ -1313,6 +1321,15 @@ export default function OverviewPage() {
         for (const item of grp.items) {
           const name = getName(item.fields) ?? item.sys.id;
           for (const fieldId of fields) {
+            const fieldLocaleMap = item.fields[fieldId];
+            const sourceVal = fieldLocaleMap?.[firstLocale];
+            // Skip if source (en-GB) is empty — nothing to translate.
+            if (isMissing(sourceVal)) continue;
+            // Skip if every target locale already has a value — nothing missing.
+            const hasAnyMissing = missingCheckCodes.some((lc) =>
+              isMissing(fieldLocaleMap?.[lc]),
+            );
+            if (!hasAnyMissing) continue;
             const row = [
               prefix,
               grp.label,
@@ -1320,8 +1337,9 @@ export default function OverviewPage() {
               item.sys.id,
               fieldId,
               ...localeCodes.map((lc) =>
-                serializeCsvValue(item.fields[fieldId]?.[lc]),
+                serializeCsvValue(fieldLocaleMap?.[lc]),
               ),
+              `https://app.contentful.com/spaces/${spaceId}/environments/${environmentId}/entries/${item.sys.id}`,
             ];
             rows.push(row);
           }
@@ -1341,19 +1359,30 @@ export default function OverviewPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `translations-${isOpco ? opcoId : partnerId}-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filenameParts = ["translations"];
+    if (isOpco) {
+      filenameParts.push(opcoId);
+      if (showPartnerInOpco && partnerId) filenameParts.push(partnerId);
+    } else {
+      filenameParts.push(partnerId);
+    }
+    filenameParts.push(new Date().toISOString().slice(0, 10));
+    a.download = `${filenameParts.join("-")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [
     resolvedGroupFields,
     localeCodes,
     firstLocale,
+    missingCheckCodes,
     isOpco,
     opcoGroups,
     partnerGroups,
     showPartnerInOpco,
     opcoId,
     partnerId,
+    spaceId,
+    environmentId,
   ]);
 
   // ── Import & Diff ──────────────────────────────────────────────────────────
@@ -1753,7 +1782,11 @@ export default function OverviewPage() {
           return;
         }
         const localeStart = 5;
-        const csvLocales = header.slice(localeStart);
+        // 'contentful_url' is a read-only metadata column added by the exporter
+        // at the end of the row. Exclude it so it is never treated as a locale.
+        const csvLocales = header
+          .slice(localeStart)
+          .filter((c) => c !== "contentful_url");
 
         // Build current-value lookup and the set of valid entry IDs in this view
         const validEntryIds = new Set<string>();

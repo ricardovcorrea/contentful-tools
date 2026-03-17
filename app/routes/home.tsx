@@ -88,7 +88,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const environment = localStorage.getItem("contentfulEnvironment");
 
   if (!token || !spaceId || !environment) {
-    return redirect("/login");
+    const { pathname, search } = new URL(request.url);
+    return redirect("/login?returnTo=" + encodeURIComponent(pathname + search));
   }
 
   // Signal the layout to show the loading overlay, then reset step progress.
@@ -520,6 +521,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export function ErrorBoundary() {
   const error = useRouteError() as any;
   const navigate = useNavigate();
+  const location = useLocation();
 
   const message =
     error?.message ??
@@ -588,7 +590,13 @@ export function ErrorBoundary() {
 
           <button
             onClick={() =>
-              isAuthError ? navigate("/login", { replace: true }) : navigate(-1)
+              isAuthError
+                ? navigate(
+                    "/login?returnTo=" +
+                      encodeURIComponent(location.pathname + location.search),
+                    { replace: true },
+                  )
+                : navigate(-1)
             }
             className="w-full rounded-lg bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white text-sm font-semibold py-3 transition-colors"
           >
@@ -758,7 +766,11 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
     searchParams.get("partner") ??
     localStorage.getItem("selectedPartner") ??
     partnerId;
-  const { pathname } = useLocation();
+  const { pathname, search: locationSearch } = useLocation();
+  const locationRef = useRef({ pathname, search: locationSearch });
+  useEffect(() => {
+    locationRef.current = { pathname, search: locationSearch };
+  }, [pathname, locationSearch]);
 
   const opcoEntrySysId = opcos.items.find(
     (o: any) =>
@@ -877,7 +889,13 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
       clearCache();
       clearContentfulManagementClient();
       queryClient.clear();
-      navigateRef.current("/login", { replace: true });
+      navigateRef.current(
+        "/login?returnTo=" +
+          encodeURIComponent(
+            locationRef.current.pathname + locationRef.current.search,
+          ),
+        { replace: true },
+      );
     };
 
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -1031,11 +1049,7 @@ export default function HomeLayout({ loaderData }: Route.ComponentProps) {
 
   return (
     <ToastProvider>
-      {showFullLoading && (
-        <div className="fixed inset-0 z-9999">
-          <LoadingScreen />
-        </div>
-      )}
+      {showFullLoading && <LoadingScreen />}
       <div className="min-h-screen bg-gray-200 p-4">
         <div className="h-[calc(100vh-2rem)] max-w-480 mx-auto bg-gray-50 flex flex-col overflow-hidden rounded-2xl border border-gray-300/60 shadow-sm">
           <AppHeader

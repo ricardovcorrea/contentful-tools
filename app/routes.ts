@@ -17,6 +17,7 @@ export default [
     route("sitemap", "routes/home.sitemap.tsx"),
     route("unpublished", "routes/home.unpublished.tsx"),
     route("scheduled", "routes/home.scheduled.tsx"),
+    route("onboarding", "routes/home.onboarding.tsx"),
   ]),
   route("login", "routes/login.tsx"),
   route(".well-known/*", "routes/well-known.ts"),

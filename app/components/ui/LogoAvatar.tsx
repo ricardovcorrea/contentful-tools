@@ -45,21 +45,35 @@ export function LogoAvatar({
   if (imgUrl) {
     if (boxWidth) {
       return (
-        <img
-          src={imgUrl}
-          alt={fallback}
-          className="shrink-0 block object-contain"
-          style={{ width: boxWidth, height: size }}
-        />
+        <span
+          className="shrink-0 inline-flex items-center justify-center rounded overflow-hidden"
+          style={{
+            width: boxWidth,
+            height: size,
+            background: "white",
+            padding: 2,
+          }}
+        >
+          <img
+            src={imgUrl}
+            alt={fallback}
+            className="block object-contain w-full h-full"
+          />
+        </span>
       );
     }
     return (
-      <img
-        src={imgUrl}
-        alt={fallback}
-        className="object-contain shrink-0 block"
-        style={{ height: size, width: "auto", maxWidth: size * 4 }}
-      />
+      <span
+        className="shrink-0 inline-flex items-center justify-center rounded overflow-hidden"
+        style={{ height: size, background: "white", padding: 2 }}
+      >
+        <img
+          src={imgUrl}
+          alt={fallback}
+          className="object-contain block h-full w-auto"
+          style={{ maxWidth: size * 4 }}
+        />
+      </span>
     );
   }
 

@@ -89,7 +89,7 @@ export function HeaderPicker({
             <LogoAvatar
               assetId={selected?.imageAssetId}
               fallback={initials(selected?.label ?? value)}
-              className="rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-white text-gray-500"
+              className="rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-gray-100 text-gray-500"
               size={28}
             />
           </div>
@@ -155,7 +155,7 @@ export function HeaderPicker({
                     <LogoAvatar
                       assetId={opt.imageAssetId}
                       fallback={initials(opt.label)}
-                      className="rounded text-[8px] font-bold shrink-0 border border-gray-200 bg-gray-100 text-gray-500"
+                      className="rounded text-[8px] font-bold shrink-0 border border-gray-200 text-gray-500"
                       size={22}
                     />
                   )}

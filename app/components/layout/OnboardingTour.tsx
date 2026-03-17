@@ -176,6 +176,57 @@ const TOUR_CSS = `
   background: rgba(15, 23, 42, 0.58) !important;
   backdrop-filter: blur(2px);
 }
+
+/* ============================================================================
+   DARK MODE overrides
+   .dark is set on <html> by this app, so all driver.js elements (appended to
+   <body>) are descendants and will pick up these selectors automatically.
+   ============================================================================ */
+
+.dark .driver-popover {
+  background: #1c2032;
+  border-color: #2c3148;
+  box-shadow:
+    0 40px 72px -16px rgba(0,0,0,.55),
+    0 16px 28px -8px rgba(0,0,0,.35),
+    0 0 0 1px rgba(255,255,255,.04) inset;
+}
+
+.dark .driver-popover-title {
+  color: #f6f7f9;
+}
+
+.dark .driver-popover-description {
+  color: #bcc2cf;
+}
+
+.dark .driver-popover-footer {
+  background: #13161f;
+  border-top-color: #2c3148;
+}
+
+.dark .driver-popover-prev-btn {
+  color: #8b92a4;
+  background: #2c3148;
+  border-color: #3a4560;
+}
+.dark .driver-popover-prev-btn:hover {
+  background: #38405c;
+  border-color: #5a6176;
+  color: #f6f7f9;
+}
+
+.dark .driver-popover-close-btn {
+  color: #5a6176;
+}
+.dark .driver-popover-close-btn:hover {
+  background: #2c3148;
+  color: #f6f7f9;
+}
+
+.dark #driver-page-overlay {
+  background: rgba(0, 0, 0, 0.72) !important;
+}
 `;
 
 // ─── Step definitions ───────────────────────────────────────────────────────────────
@@ -183,20 +234,20 @@ const STEPS = [
   {
     target: null as string | null,
     side: undefined as "right" | "left" | "bottom" | "top" | undefined,
-    title: "Welcome to Avios Content Tools 👋",
-    body: "A focused workspace for managing Contentful content across OPCOs and partners. This quick tour walks you through the key parts of the interface so you’re up and running in minutes.",
+    title: "Welcome to Avios Digital Vouchers Tools 👋",
+    body: "A focused workspace for managing Contentful content across OPCOs and partners — without ever opening Contentful directly. This quick tour walks you through every section so you're productive from the start. Use the arrows below or press ← → on your keyboard to navigate.",
   },
   {
     target: "opco-picker",
     side: "bottom" as const,
     title: "Select your OPCO",
-    body: "Every piece of content belongs to an OPCO (operating company). Use this picker to switch the active OPCO — all pages, messages and translation data shown in the sidebar will update accordingly.",
+    body: "Every piece of content in this tool belongs to an OPCO (operating company — e.g. Avios, British Airways, Iberia). Use this picker to switch the active OPCO. All pages, partner lists, messages, sitemap data and translation tables shown in the sidebar will update automatically when you switch.",
   },
   {
     target: "partner-picker",
     side: "bottom" as const,
     title: "Select a Partner",
-    body: "Within an OPCO you can focus on a specific partner. Partner-specific entries (pages, messages, email templates) are scoped to this selection. Change it at any time from the header.",
+    body: "Within an OPCO, content is often scoped to a specific partner (e.g. a retail or travel brand). Use this picker to focus on one partner. Partner-specific entries — pages, messages and email templates — are then shown in the sidebar. You can change your partner selection at any time without losing your place.",
   },
   {
     target: "edit-mode",
@@ -205,10 +256,22 @@ const STEPS = [
     body: "By default the tool is read-only so you can explore without risk. Click \u201cView only\u201d to switch to Editing mode — inline cell editors, CSV import and publish actions all become available.",
   },
   {
+    target: "nav-overview",
+    side: "right" as const,
+    title: "Environment Overview",
+    body: "The Overview dashboard gives you a birds-eye view of the current environment. It surfaces key health metrics at a glance — how many entries have unpublished changes, how many scheduled actions are queued, content freshness indicators, and quick-access cards for Onboarding and Translations. A good starting point each session.",
+  },
+  {
+    target: "nav-onboarding",
+    side: "right" as const,
+    title: "Onboarding Checklist",
+    body: "The Onboarding page provides a structured checklist for setting up a new OPCO or partner inside Contentful. Each section (Backend, Frontend, CMS Setup, etc.) contains discrete steps you can tick off as you go. Progress is saved directly on the OPCO's Contentful entry so your whole team can see the current state at any time.",
+  },
+  {
     target: "translations-section",
     side: "right" as const,
     title: "Translate & edit inline",
-    body: "The Translations section shows every localizable field as a table — one row per field, one column per locale. In Editing mode, click any cell to edit directly and press ⌘ Enter to save. Amber cells flag missing values.",
+    body: "The Translations section renders every localizable field as a spreadsheet-style table — one row per CMS field, one column per locale. In Editing mode, click any cell to edit it in place and press ⌘ Enter (or Ctrl Enter) to save. Amber cells flag missing or empty translations. You can also bulk-import values via CSV for any locale.",
   },
   {
     target: "nav-unpublished",
@@ -220,13 +283,25 @@ const STEPS = [
     target: "nav-sitemap",
     side: "right" as const,
     title: "Browse the page hierarchy",
-    body: "The Sitemap renders the full page tree for the selected OPCO. Status dots show at a glance: green = published and current, amber = unpublished draft changes, grey = never published. Click any row to open the entry.",
+    body: "The Sitemap renders the full tree of pages for the selected OPCO, mirroring the structure as it exists in Contentful. Coloured status dots give an instant health check: green = published and up-to-date, amber = has unpublished draft changes, grey = never been published. Click any row to open the entry in the page editor.",
+  },
+  {
+    target: "nav-scheduled",
+    side: "right" as const,
+    title: "Scheduled publish actions",
+    body: "The Scheduled page lists every entry that has a future publish or unpublish action queued against it. Each row shows the target date and time, the action type, and the entry it applies to. You can cancel a scheduled action from this page without opening Contentful. The count badge on the sidebar icon updates in real time.",
+  },
+  {
+    target: "nav-locales",
+    side: "right" as const,
+    title: "Manage locales",
+    body: "The Locales section lists every locale configured for this environment. Clicking a locale opens a detailed breakdown of translation coverage — useful for spotting gaps before a release. The badge on the sidebar icon shows the total number of active locales at a glance.",
   },
   {
     target: "opco-section",
     side: "right" as const,
     title: "Direct entry access",
-    body: "Expand the OPCO and Partner rows here to jump straight to their root Contentful entries — pages, messages, emails and any custom reference groups. No need to search in Contentful.",
+    body: "The OPCO and Partner buttons here jump straight to the root Contentful entry for the current selection — no searching in Contentful needed. From the entry view you can inspect every field, compare locales side-by-side, edit in place (in Editing mode), and navigate to any linked reference entry.",
   },
   {
     target: "take-tour",
@@ -300,4 +375,3 @@ export function OnboardingTour({ open, onClose }: Props) {
 
   return null;
 }
-
